@@ -165,20 +165,16 @@ sub build_binary_meta_block {
 
 # ===== END src/PCWAV/Format/S1.pm =====
 
-# ===== BEGIN src/PCWAV/Binary/S1.pm =====
-package PCWAV::Binary::S1;
+# ===== BEGIN src/PCWAV/Binary/S1Encode.pm =====
+package PCWAV::Binary::S1Encode;
 
-use PCWAV::Common;
-use PCWAV::Format::S1;
-use PCWAV::WavWriter;
+
 
 sub build_payload {
     my (%opt) = @_;
-
     my $addr = $opt{addr};
     my $name = $opt{name} // '';
     my @bin  = @{$opt{bytes} || []};
-
     die "binary data is empty\n" unless @bin;
 
     my @payload;
@@ -207,17 +203,12 @@ sub build_payload {
             @chunk = ();
         }
     }
-    if (@chunk) {
-        push @payload, @chunk;
-        my $sum = PCWAV::Common::checksum_s1_logical(@chunk);
-        push @payload, PCWAV::Common::nibswap($sum);
-    }
+    push @payload, @chunk if @chunk;
 
-    # yasm.pl-compatible trailer for s1:
-    # FF FF checksum, where checksum is computed from the two FF bytes
-    push @payload, 0xFF, 0xFF;
-    my $footer_sum = PCWAV::Common::checksum_s1_logical(0xFF, 0xFF);
-    push @payload, PCWAV::Common::nibswap($footer_sum);
+    push @payload, 0xFF;
+    my $tail_sum = PCWAV::Common::checksum_s1_logical(0xFF);
+    push @payload, 0xFF;
+    push @payload, PCWAV::Common::nibswap($tail_sum);
 
     return @payload;
 }
@@ -225,13 +216,10 @@ sub build_payload {
 sub payload_to_pcm {
     my (@payload) = @_;
     my $pcm = '';
-
-    # yasm.pl leader: raw w1 repeated 0x400 times
     my $w1 = PCWAV::WavWriter::w1_s1();
     for (1 .. 0x400) {
         $pcm .= $w1;
     }
-
     for my $b (@payload) {
         $pcm .= PCWAV::WavWriter::encode_byte_s1($b);
     }
@@ -240,58 +228,32 @@ sub payload_to_pcm {
 
 1;
 
-# ===== END src/PCWAV/Binary/S1.pm =====
-
-# ===== BEGIN src/PCWAV/Basic/S1.pm =====
-package PCWAV::Basic::S1;
-
-sub tokenize_basic {
-    die "BASIC s1 tokenizer is not implemented yet\n";
-}
-
-1;
-
-# ===== END src/PCWAV/Basic/S1.pm =====
+# ===== END src/PCWAV/Binary/S1Encode.pm =====
 
 package main;
 
 # ===== BEGIN src/encode_main.pl =====
 
 
-
-use PCWAV::Common;
-use PCWAV::Binary::S1;
-use PCWAV::WavWriter;
-use PCWAV::Format::S1;
-
 sub usage {
     die <<'USAGE';
 usage:
-  perl src/encode_main.pl bin --format s1 --addr 4000 --name YAGSHI input.bin output.wav
-
-notes:
-  - currently implemented: s1 binary encode only
-  - future:
-      basic --format s1/s2/old
-      bin   --format old
+  perl src/encode_main.pl s1bin [--addr 0000] [--name FNAME] input.bin output.wav
 USAGE
 }
 
 sub main {
     my @args = @ARGV;
     usage() unless @args >= 1;
-
     my $mode = shift @args;
-    die "only 'bin' mode is implemented now\n" unless $mode eq 'bin';
+    die "only 's1bin' is implemented now\n" unless $mode eq 's1bin';
 
-    my %opt = (format => undef, addr => undef, name => '');
+    my %opt = (addr => 0x0000, name => 'FNAME');
 
     while (@args > 2) {
         my $k = shift @args;
-        if ($k eq '--format') {
-            $opt{format} = shift @args;
-        } elsif ($k eq '--addr') {
-            $opt{addr} = PCWAV::Common::parse_hex_addr(shift @args);
+        if ($k eq '--addr') {
+            $opt{addr} = PCWAV::Common::parse_num(shift @args);
         } elsif ($k eq '--name') {
             $opt{name} = shift @args;
         } else {
@@ -302,24 +264,17 @@ sub main {
     usage() unless @args == 2;
     my ($input, $output) = @args;
 
-    die "--format is required\n" unless defined $opt{format};
-    die "only --format s1 is implemented now\n" unless $opt{format} eq 's1';
-    die "--addr is required\n" unless defined $opt{addr};
-
     my $data = PCWAV::Common::read_file_bin($input);
     my @bytes = PCWAV::Common::bytes_from_scalar($data);
-
-    my @payload = PCWAV::Binary::S1::build_payload(
+    my @payload = PCWAV::Binary::S1Encode::build_payload(
         addr  => $opt{addr},
         name  => $opt{name},
         bytes => \@bytes,
     );
-
-    my $pcm = PCWAV::Binary::S1::payload_to_pcm(@payload);
+    my $pcm = PCWAV::Binary::S1Encode::payload_to_pcm(@payload);
     PCWAV::WavWriter::write_wav_file($output, $pcm);
 
     print "wrote $output\n";
-    print "payload bytes: " . scalar(@payload) . "\n";
 }
 
 main();

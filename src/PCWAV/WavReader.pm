@@ -16,7 +16,7 @@ sub read_wav {
     die "WAV format error: no WAVE\n" unless $wave eq 'WAVE';
 
     my %fmt;
-    my $data = undef;
+    my $data;
 
     while (!eof($fh)) {
         my $n = read($fh, my $tag, 4);
@@ -50,18 +50,23 @@ sub read_wav {
         }
     }
 
-    die "unsupported WAV: only PCM supported\n" unless ($fmt{audio_format} || 0) == 1;
+    die "unsupported WAV: only PCM supported\n"
+        unless ($fmt{audio_format} || 0) == 1;
+
     die "missing data chunk\n" unless defined $data;
-    die "unsupported channel count: $fmt{channels}\n" unless ($fmt{channels} == 1 || $fmt{channels} == 2);
-    die "unsupported bits/sample: $fmt{bits_per_sample}\n" unless ($fmt{bits_per_sample} == 8 || $fmt{bits_per_sample} == 16);
+
+    die "unsupported channel count: $fmt{channels} (supported: 1 or 2)\n"
+        unless ($fmt{channels} == 1 || $fmt{channels} == 2);
+
+    die "unsupported bits/sample: $fmt{bits_per_sample} (supported: 8 or 16)\n"
+        unless ($fmt{bits_per_sample} == 8 || $fmt{bits_per_sample} == 16);
+
+    die "unsupported sample rate: $fmt{sample_rate}Hz (supported: up to 32000Hz)\n"
+        unless ($fmt{sample_rate} <= 32000);
 
     return {
-        riff_size       => $riff_size,
-        audio_format    => $fmt{audio_format},
         channels        => $fmt{channels},
         sample_rate     => $fmt{sample_rate},
-        byte_rate       => $fmt{byte_rate},
-        block_align     => $fmt{block_align},
         bits_per_sample => $fmt{bits_per_sample},
         data            => $data,
     };
