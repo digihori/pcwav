@@ -49,9 +49,14 @@ my %SPACE_AROUND_TOKENS = map { $_ => 1 } qw(
 );
 
 my %SPACE_AFTER_TOKENS = map { $_ => 1 } qw(
-    FOR IF LET REM READ DATA PAUSE PRINT INPUT
-    GOSUB AREAD LPRINT RETURN RESTORE USING DIM CALL POKE
-    NEXT
+    RUN NEW CONT PASS LIST LLIST CSAVE CLOAD
+    RANDOM DEGREE RADIAN GRAD BEEP WAIT GOTO TRON TROFF CLEAR
+    USING DIM CALL POKE
+    IF FOR LET REM END NEXT STOP READ DATA PAUSE PRINT INPUT
+    GOSUB AREAD LPRINT RETURN RESTORE
+    REC POL ROT DEC HEX TEN RCP SQU CUR HSN HCS HTN AHS AHC AHT
+    FAC LN LOG EXP SQR SIN COS TAN INT ABS SGN DEG DMS ASN ACS ATN
+    RND NOT ASC VAL LEN PEEK CHR$ STR$ MID$ LEFT$ RIGHT$ INKEY$ PI MEM
 );
 
 sub find_and_extract_basic {
@@ -59,36 +64,58 @@ sub find_and_extract_basic {
     my @b = ref($raw_ref) eq 'ARRAY' ? @$raw_ref : unpack('C*', $raw_ref);
 
     my $n = scalar @b;
-    for (my $i = 0; $i < $n - 12; $i++) {
-        next unless $b[$i] == 0xFF;
+    for (my $i = 0; $i < $n - 10; $i++) {
+        my $type_pos;
 
-        my ($name_pos, $body_start);
-
-        # FF 00 ...... F5 CS BODY...
-        if ($i + 9 < $n && $b[$i + 1] == 0x00 && $b[$i + 8] == 0xF5) {
-            $name_pos   = $i + 1;
-            $body_start = $i + 10;
+        # 07 ...
+        if ($b[$i] == 0x07) {
+            $type_pos = $i;
         }
-        # FF XX 00 ...... F5 CS BODY...
-        elsif ($i + 10 < $n && $b[$i + 2] == 0x00 && $b[$i + 9] == 0xF5) {
-            $name_pos   = $i + 2;
-            $body_start = $i + 11;
+        # FF 07 ...
+        elsif ($i + 1 < $n && $b[$i] == 0xFF && $b[$i + 1] == 0x07) {
+            $type_pos = $i + 1;
         }
         else {
             next;
         }
 
-        my @name_blk = @b[$name_pos .. $name_pos + 7];
-        my $name = _decode_name_block(@name_blk);
+        # 07 + reversed filename(7 bytes) + F5 + checksum
+        next unless $type_pos + 9 < $n;
+        next unless $b[$type_pos + 8] == 0xF5;
 
-        my $end = _find_basic_terminator(\@b, $body_start);
-        next if $end < 0;
+        my @name_rev = @b[$type_pos + 1 .. $type_pos + 7];
+        my $name = _decode_reversed_name_7(@name_rev);
 
-        my @body_raw = @b[$body_start .. $end - 1];
-        my @body     = map { _nibble_swap($_) } @body_raw;
+        my $pos = $type_pos + 10;   # 07 + 7name + F5 + checksum
+        my @body_raw;
+        my $chunk_len = 0;
+
+        while ($pos < $n) {
+            # 終端 FF FF checksum
+            last if $pos + 2 < $n && $b[$pos] == 0xFF && $b[$pos + 1] == 0xFF;
+
+            push @body_raw, $b[$pos++];
+            $chunk_len++;
+
+            if ($chunk_len == 120) {
+                last if $pos >= $n;
+                my $sum = $b[$pos++];  # checksum を読み飛ばす
+                $chunk_len = 0;
+
+                # 必要ならここで検証もできる
+                # my @chunk = @body_raw[@body_raw-120 .. $#body_raw];
+                # my $expect = _nibble_swap(_checksum_s1_logical(@chunk));
+                # next unless $sum == $expect;
+            }
+        }
+
+        next unless $pos + 2 < $n && $b[$pos] == 0xFF && $b[$pos + 1] == 0xFF;
+
+        my @body = map { _nibble_swap($_) } @body_raw;
 
         return {
             offset     => $i,
+            type_pos   => $type_pos,
             name       => $name,
             body_bytes => \@body,
         };
@@ -280,6 +307,21 @@ sub _decode_text_char {
 sub _nibble_swap {
     my ($v) = @_;
     return (($v & 0x0F) << 4) | (($v & 0xF0) >> 4);
+}
+
+sub _decode_reversed_name_7 {
+    my (@rev) = @_;
+
+    my @chars = reverse @rev;
+
+    my $name = join '', map {
+        ($_ == 0x00) ? '' :
+        ($_ >= 0x20 && $_ <= 0x7E) ? chr($_) :
+        ''
+    } @chars;
+
+    $name =~ s/\s+$//;
+    return $name;
 }
 
 1;
