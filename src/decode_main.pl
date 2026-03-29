@@ -101,7 +101,6 @@ sub decode_s1bin {
 
 sub decode_s1basic {
 my (@args) = @_;
-    #die "DEBUG: entered decode_s1basic\n";
 
     my ($output, $raw_ref) = _parse_s1_options_and_decode_raw(@args);
 
@@ -113,21 +112,6 @@ my (@args) = @_;
     print "wrote $output\n";
     printf "offset: %d\n", $info->{offset};
     printf "name: %s\n",   $info->{name};
-
-
-#    my (@args) = @_;
-
-#    my ($output, $raw_ref) = _parse_s1_options_and_decode_raw(@args);
-
-#    my $info = PCWAV::Basic::S1Decode::find_and_extract_basic($raw_ref);
-#    my $text = PCWAV::Basic::S1Decode::decode_s1_basic_body($info->{body_bytes});
-
-    # 改行変換を避けるため raw で書く
-#    PCWAV::Common::write_file_bin($output, $text);
-
-#    print "wrote $output\n";
-#    printf "offset: %d\n", $info->{offset};
-#    printf "name: %s\n",   $info->{name};
 }
 
 sub main {
