@@ -13,6 +13,7 @@ my %targets = (
         ],
         main => 'src/encode_main.pl',
     },
+
     'dist/pcwav-decode.pl' => {
         modules => [
             'src/PCWAV/Common.pm',
@@ -20,6 +21,7 @@ my %targets = (
             'src/PCWAV/PcmNormalize.pm',
             'src/PCWAV/RawDecode.pm',
             'src/PCWAV/Binary/S1Decode.pm',
+            'src/PCWAV/Basic/S1Decode.pm',
         ],
         main => 'src/decode_main.pl',
     },
@@ -35,11 +37,13 @@ sub build_one {
     my ($output, $spec) = @_;
 
     open my $fh, '>', $output or die "cannot write $output: $!";
+
     print {$fh} "#!/usr/bin/perl\n";
     print {$fh} "use strict;\nuse warnings;\n\n";
 
     for my $file (@{$spec->{modules}}) {
         my $text = slurp($file);
+
         $text =~ s/^\s*use\s+strict\s*;\s*$//mg;
         $text =~ s/^\s*use\s+warnings\s*;\s*$//mg;
         $text =~ s/^\s*use\s+PCWAV::[A-Za-z0-9_:]+\s*;\s*$//mg;
@@ -50,6 +54,7 @@ sub build_one {
     }
 
     my $main = slurp($spec->{main});
+
     $main =~ s/^\s*use\s+strict\s*;\s*$//mg;
     $main =~ s/^\s*use\s+warnings\s*;\s*$//mg;
     $main =~ s/^\s*use\s+FindBin\b.*?;\s*$//mg;
