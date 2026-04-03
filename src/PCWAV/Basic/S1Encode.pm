@@ -66,19 +66,6 @@ sub encode_s1_basic_text {
             0x0D;
     }
 
-    # ==== DEBUG: logical body dump ====
-    warn sprintf("DEBUG body_len=%d\n", scalar(@body));
-    for (my $i = 0; $i < @body; $i += 16) {
-        my $end = $i + 15 < $#body ? $i + 15 : $#body;
-        my @chunk = @body[$i .. $end];
-        warn sprintf(
-            "%04X: %s\n",
-            $i,
-            join(' ', map { sprintf('%02X', $_) } @chunk)
-        );
-    }
-    # ==== DEBUG END ====
-
     my @out;
 
     # header: 07 + reversed filename(7 bytes) + F5 + checksum
@@ -106,11 +93,6 @@ sub encode_s1_basic_text {
         my $sum = PCWAV::Common::checksum_s1_logical(@chunk_swapped);
         my $sum_out = PCWAV::Common::nibswap($sum);
 
-        warn sprintf(
-            "DEBUG chunk[%d] pos=%d len=%d checksum=%02X\n",
-            $i, $i * 120, scalar(@chunk), $sum_out
-        );
-
         push @out, @chunk_swapped;
         push @out, $sum_out;
     }
@@ -119,16 +101,8 @@ sub encode_s1_basic_text {
     my @last_chunk_logical = @{ $chunks[-1] };
     my @last_chunk_swapped = map { PCWAV::Common::nibswap($_) } @last_chunk_logical;
 
-    warn sprintf(
-        "DEBUG last_chunk pos=%d len=%d\n",
-        (@chunks - 1) * 120,
-        scalar(@last_chunk_logical)
-    );
-
     push @out, @last_chunk_swapped;
 
-    # ★ ここで呼ぶ
-    #debug_tail_patterns(\@body, \@chunks, \@last_chunk_logical, \@name_rev);
 
     # tail checksum = last_chunk + first FF
     my $tail_sum = _checksum_s1_basic_tail(@last_chunk_logical, 0xFF);
@@ -273,6 +247,26 @@ sub _encode_reversed_name_7 {
     return map { ord($_) } @rev;
 }
 
+# tail checksum (S1 BASIC):
+#
+# ・120バイトchunk:
+#   - nibble-swap後のデータに対して checksum を計算
+#
+# ・last chunk（120未満）:
+#   - chunk内checksumは付かない
+#   - tail checksum は「論理データ（未swap）」で計算する
+#
+# ・計算方法:
+#   - 各byteを upper/lower nibble に分解して単純加算
+#   - キャリー補正は行わない（単純 mod 256）
+#   - 最後に 0xFF を加算
+#
+# ・出力:
+#   - nibble swap して末尾に格納（FF FF の後ろ）
+#
+# ※ 注意:
+#   chunk checksum と tail checksum では
+#   「swap前/後」と「加算方法」が異なるので混同しないこと
 sub _checksum_s1_basic_tail {
     my (@bytes) = @_;
     my $sum = 0;
@@ -317,41 +311,6 @@ sub _checksum_carry_each_nibble {
 sub _checksum_common_style {
     my (@bytes) = @_;
     return PCWAV::Common::checksum_s1_logical(@bytes);
-}
-
-sub debug_tail_patterns {
-    my ($body_ref, $chunks_ref, $last_chunk_ref, $name_rev_ref) = @_;
-
-    my @body   = @$body_ref;
-    my @chunks = @$chunks_ref;
-    my @last   = @$last_chunk_ref;
-    my @name_rev = $name_rev_ref ? @$name_rev_ref : ();
-
-    print "\n=== TAIL DEBUG START ===\n";
-
-    my %cases = (
-        'last+FF simple' => [ \&_checksum_simple_nibbles,      [ @last, 0xFF ] ],
-        'last+FF carry'  => [ \&_checksum_carry_each_nibble,   [ @last, 0xFF ] ],
-        'last+FF common' => [ \&_checksum_common_style,        [ @last, 0xFF ] ],
-
-        'body+FF simple' => [ \&_checksum_simple_nibbles,      [ @body, 0xFF ] ],
-        'body+FF carry'  => [ \&_checksum_carry_each_nibble,   [ @body, 0xFF ] ],
-        'body+FF common' => [ \&_checksum_common_style,        [ @body, 0xFF ] ],
-
-        'hdr+body+FF simple' => [ \&_checksum_simple_nibbles,    [ 0x07, @name_rev, 0xF5, @body, 0xFF ] ],
-        'hdr+body+FF carry'  => [ \&_checksum_carry_each_nibble, [ 0x07, @name_rev, 0xF5, @body, 0xFF ] ],
-        'hdr+body+FF common' => [ \&_checksum_common_style,      [ 0x07, @name_rev, 0xF5, @body, 0xFF ] ],
-    );
-
-    for my $label (sort keys %cases) {
-        my ($func, $bytes_ref) = @{ $cases{$label} };
-        my $logical = $func->(@$bytes_ref);
-        my $raw = PCWAV::Common::nibswap($logical);
-
-        printf "%-20s logical=%02X raw=%02X\n", $label, $logical, $raw;
-    }
-
-    print "=== TAIL DEBUG END ===\n\n";
 }
 
 1;
