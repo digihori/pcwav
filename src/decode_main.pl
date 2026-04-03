@@ -11,6 +11,7 @@ use PCWAV::PcmNormalize;
 use PCWAV::RawDecode;
 use PCWAV::Binary::S1Decode;
 use PCWAV::Basic::S1Decode;
+use PCWAV::Basic::S2Decode;
 
 sub usage {
     die <<'MSG';
@@ -18,6 +19,7 @@ usage:
   perl src/decode_main.pl raw input.wav output.bin
   perl src/decode_main.pl s1bin [--skip-ms 1000] [--skip-samples N] input.wav output.bin
   perl src/decode_main.pl s1basic [--skip-ms 1000] [--skip-samples N] input.wav output.bas
+  perl src/decode_main.pl s2basic input.wav output.bas
 MSG
 }
 
@@ -114,6 +116,22 @@ my (@args) = @_;
     printf "name: %s\n",   $info->{name};
 }
 
+sub decode_s2basic {
+    my (@args) = @_;
+
+    my ($output, $raw_ref) = _parse_s1_options_and_decode_raw(@args);
+
+    my $info = PCWAV::Basic::S2Decode::find_and_extract_basic($raw_ref);
+    my $text = PCWAV::Basic::S2Decode::decode_s2_basic_body($info->{body_bytes});
+
+    PCWAV::Common::write_file_bin($output, $text);
+
+    print "wrote $output\n";
+    printf "offset: %d\n", $info->{offset};
+    printf "type: %02X\n", $info->{type};
+    printf "name: %s\n",  $info->{name};
+}
+
 sub main {
     my @args = @ARGV;
     usage() unless @args >= 3;
@@ -129,6 +147,10 @@ sub main {
     }
     elsif ($mode eq 's1basic') {
         decode_s1basic(@args);
+    }
+    elsif ($mode eq 's2basic') {
+        usage() unless @args >= 2;
+        decode_s2basic(@args);
     }
     else {
         die "unknown mode: $mode\n";
