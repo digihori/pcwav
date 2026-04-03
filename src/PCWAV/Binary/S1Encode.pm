@@ -52,7 +52,7 @@ sub payload_to_pcm {
     my (@payload) = @_;
     my $pcm = '';
     my $w1 = PCWAV::WavWriter::w1_s1();
-    for (1 .. 0x400) {
+    for (1 .. 0x800) {
         $pcm .= $w1;
     }
     for my $b (@payload) {

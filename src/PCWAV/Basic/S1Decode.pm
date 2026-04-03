@@ -88,30 +88,47 @@ sub find_and_extract_basic {
 
         my $pos = $type_pos + 10;   # 07 + 7name + F5 + checksum
         my @body_raw;
-        my $chunk_len = 0;
 
         while ($pos < $n) {
-            # 終端 FF FF checksum
+            # terminator: FF FF checksum
             last if $pos + 2 < $n && $b[$pos] == 0xFF && $b[$pos + 1] == 0xFF;
 
-            push @body_raw, $b[$pos++];
-            $chunk_len++;
+            my $remain = $n - $pos;
 
-            if ($chunk_len == 120) {
-                last if $pos >= $n;
-                my $sum = $b[$pos++];  # checksum を読み飛ばす
-                $chunk_len = 0;
+            # まず120バイト読めるか
+            if ($remain >= 123) {
+                # 120 bytes + checksum + ...
+                my @chunk = @b[$pos .. $pos + 119];
 
-                # 必要ならここで検証もできる
-                # my @chunk = @body_raw[@body_raw-120 .. $#body_raw];
-                # my $expect = _nibble_swap(_checksum_s1_logical(@chunk));
-                # next unless $sum == $expect;
+                # 120バイト直後が terminator なら、それは full chunk ではなく last chunk
+                if ($b[$pos + 120] == 0xFF && $b[$pos + 121] == 0xFF) {
+                    push @body_raw, @chunk;
+                    $pos += 120;
+                    next;
+                }
+
+                # full chunk
+                push @body_raw, @chunk;
+                $pos += 121;  # 120 data + 1 checksum
+                next;
             }
+
+            # 残りは last partial chunk
+            while ($pos < $n) {
+                last if $pos + 2 < $n && $b[$pos] == 0xFF && $b[$pos + 1] == 0xFF;
+                push @body_raw, $b[$pos++];
+            }
+            last;
         }
 
-        next unless $pos + 2 < $n && $b[$pos] == 0xFF && $b[$pos + 1] == 0xFF;
+        # terminator が必要
+        next unless $pos + 2 < $n;
+        next unless $b[$pos] == 0xFF && $b[$pos + 1] == 0xFF;
 
         my @body = map { _nibble_swap($_) } @body_raw;
+
+warn sprintf("DEBUG extracted body bytes = %d\n", scalar(@body));
+warn sprintf("DEBUG terminator at raw pos = %d\n", $pos);
 
         return {
             offset     => $i,
@@ -262,10 +279,17 @@ sub _format_items {
         }
     }
 
-    # コロンの前後や行末の余計な空白を整理
+    # コロンや行末の余計な空白を整理
     $out =~ s/[ ]+:/:/g;
     $out =~ s/:[ ]+/:/g;
     $out =~ s/[ ]+$//;
+
+    # 二重空白を1個に圧縮（文字列/REM中は items化の時点で保持済みなのでここは実質安全）
+    $out =~ s/ {2,}/ /g;
+
+    # ただし "( " は "(" に、"; " は ";" に寄せる
+    $out =~ s/\( +/(/g;
+    $out =~ s/; +/;/g;
 
     return $out;
 }
@@ -292,10 +316,21 @@ sub _need_space_after_token {
     my ($tok, $next) = @_;
     return 0 unless $next;
 
-    return 1 if $SPACE_AROUND_TOKENS{$tok};
-    return 1 if $SPACE_AFTER_TOKENS{$tok};
+    # まず、空白候補トークンでなければ入れない
+    return 0 unless $SPACE_AROUND_TOKENS{$tok} || $SPACE_AFTER_TOKENS{$tok};
 
-    return 0;
+    # 次が text の場合、中身を見る
+    if ($next->{type} eq 'text') {
+        my $nv = $next->{value};
+
+        # すでに空白なら追加しない
+        return 0 if $nv =~ /^ /;
+
+        # 次が "(" なら空白を入れない
+        return 0 if $nv =~ /^\(/;
+    }
+
+    return 1;
 }
 
 sub _decode_text_char {

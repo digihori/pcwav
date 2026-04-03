@@ -4,49 +4,71 @@ use FindBin;
 use lib "$FindBin::Bin";
 use lib "$FindBin::Bin/PCWAV";
 use lib "$FindBin::Bin/..";
+
 use PCWAV::Common;
+use PCWAV::WavWriter;
 use PCWAV::Binary::S1Encode;
+use PCWAV::Basic::S1Encode;
 
 sub usage {
-    die <<'USAGE';
+    die <<'MSG';
 usage:
-  perl src/encode_main.pl s1bin [--addr 0000] [--name FNAME] input.bin output.wav
-USAGE
+  perl src/encode_main.pl s1bin   input.bin  output.wav [filename] [addr]
+  perl src/encode_main.pl s1basic input.bas  output.wav [filename]
+MSG
+}
+
+sub encode_s1bin {
+    my ($input, $output, $filename, $addr) = @_;
+    $filename = defined $filename ? $filename : 'NONAME';
+    $addr     = defined $addr     ? PCWAV::Common::parse_num($addr) : 0xC000;
+
+    my $bin = PCWAV::Common::read_file_bin($input);
+    my @bytes = PCWAV::Common::bytes_from_scalar($bin);
+
+    my @payload = PCWAV::Binary::S1Encode::build_payload(
+        addr  => $addr,
+        name  => $filename,
+        bytes => \@bytes,
+    );
+
+    my $pcm = PCWAV::Binary::S1Encode::payload_to_pcm(@payload);
+
+    PCWAV::WavWriter::write_wav_file($output, $pcm);
+    print "wrote $output\n";
+}
+
+sub encode_s1basic {
+    my ($input, $output, $filename) = @_;
+    $filename = defined $filename ? $filename : 'NONAME';
+
+    my $text = PCWAV::Common::read_file_bin($input);
+    my $payload = PCWAV::Basic::S1Encode::encode_s1_basic_text($text, $filename);
+
+    my @payload_bytes = PCWAV::Common::bytes_from_scalar($payload);
+    my $pcm = PCWAV::Binary::S1Encode::payload_to_pcm(@payload_bytes);
+
+    PCWAV::WavWriter::write_wav_file($output, $pcm);
+    print "wrote $output\n";
 }
 
 sub main {
     my @args = @ARGV;
-    usage() unless @args >= 1;
+    usage() unless @args >= 3;
+
     my $mode = shift @args;
-    die "only 's1bin' is implemented now\n" unless $mode eq 's1bin';
 
-    my %opt = (addr => 0x0000, name => 'FNAME');
-
-    while (@args > 2) {
-        my $k = shift @args;
-        if ($k eq '--addr') {
-            $opt{addr} = PCWAV::Common::parse_num(shift @args);
-        } elsif ($k eq '--name') {
-            $opt{name} = shift @args;
-        } else {
-            die "unknown option: $k\n";
-        }
+    if ($mode eq 's1bin') {
+        usage() unless @args >= 2;
+        encode_s1bin(@args);
     }
-
-    usage() unless @args == 2;
-    my ($input, $output) = @args;
-
-    my $data = PCWAV::Common::read_file_bin($input);
-    my @bytes = PCWAV::Common::bytes_from_scalar($data);
-    my @payload = PCWAV::Binary::S1Encode::build_payload(
-        addr  => $opt{addr},
-        name  => $opt{name},
-        bytes => \@bytes,
-    );
-    my $pcm = PCWAV::Binary::S1Encode::payload_to_pcm(@payload);
-    PCWAV::WavWriter::write_wav_file($output, $pcm);
-
-    print "wrote $output\n";
+    elsif ($mode eq 's1basic') {
+        usage() unless @args >= 2;
+        encode_s1basic(@args);
+    }
+    else {
+        die "unknown mode: $mode\n";
+    }
 }
 
 main();
