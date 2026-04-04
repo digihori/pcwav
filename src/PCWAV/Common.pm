@@ -25,6 +25,11 @@ sub bytes_from_scalar {
     return map { ord($_) } split //, $data;
 }
 
+sub bytes_to_scalar {
+    my (@bytes) = @_;
+    return pack('C*', @bytes);
+}
+
 sub nibswap {
     my ($v) = @_;
     return (($v >> 4) | (($v << 4) & 0xF0)) & 0xFF;

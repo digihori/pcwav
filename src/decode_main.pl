@@ -119,7 +119,7 @@ sub decode_s1basic {
 sub decode_s2basic {
     my (@args) = @_;
 
-    my ($output, $raw_ref) = _parse_s1_options_and_decode_raw(@args);
+    my ($output, $raw_ref) = _parse_decode_options_and_decode_raw(@args);
 
     my $info = PCWAV::Basic::S2Decode::find_and_extract_basic($raw_ref);
     my $text = PCWAV::Basic::S2Decode::decode_s2_basic_body($info->{body_bytes});
@@ -171,7 +171,7 @@ sub main {
     if    ($mode eq 'raw')      { usage() unless @args == 2; decode_raw(@args); }
     elsif ($mode eq 's1bin')    { decode_s1bin(@args); }
     elsif ($mode eq 's1basic')  { decode_s1basic(@args); }
-    elsif ($mode eq 's2basic')  { usage() unless @args >= 2; decode_s1basic(@args); }
+    elsif ($mode eq 's2basic')  { usage() unless @args >= 2; decode_s2basic(@args); }
     elsif ($mode eq 'oldbin')   { decode_oldbin(@args); }
     elsif ($mode eq 'oldbasic') { decode_oldbasic(@args); }
     else {

@@ -9,131 +9,157 @@ sub chunk_size {
     return $CHUNK_SIZE;
 }
 
-sub build_basic_header {
+# -----------------------------
+# Encode
+# -----------------------------
+
+sub wrap_basic_payload {
     my (%opt) = @_;
 
-    my $filename = _normalize_filename($opt{filename} // '');
-    my $file_type = $opt{password} ? 0x21 : 0x20;   # 論理値
-    # raw上では nibswap されて 0x12 / 0x02 になる
+    my $type     = $opt{password} ? 0x12 : 0x02;   # rawで見える値
+    my @filename = @{ _normalize_filename($opt{filename} // '') };  # rawで見える順
+    my @body     = _to_bytes($opt{body});
 
-    return (
-        $file_type,
-        @{$filename},
-        0xF5,
-    );
+    my @out;
+
+    # type は単独
+    push @out, $type;
+
+    # filename(7)+F5 が最初の 8byte ブロック
+    my @name_block = (@filename, 0xF5);
+    push @out, @name_block;
+    push @out, PCWAV::Common::checksum_old_logical(@name_block);
+
+    # body は論理値 -> raw側表現(nibswap) にしてから 8byte checksum
+    my @body_raw = map { PCWAV::Common::nibswap($_) } @body;
+    push @out, _insert_old_checksums(@body_raw);
+
+    return wantarray ? @out : pack('C*', @out);
 }
 
-sub build_binary_header {
+sub wrap_binary_payload {
     my (%opt) = @_;
 
-    my $filename   = _normalize_filename($opt{filename} // '');
     my $start_addr = $opt{start_addr};
     my $end_offset = $opt{end_offset};
 
-    die "build_binary_header: start_addr is required\n"
+    die "wrap_binary_payload: start_addr is required\n"
         unless defined $start_addr;
-    die "build_binary_header: end_offset is required\n"
+    die "wrap_binary_payload: end_offset is required\n"
         unless defined $end_offset;
 
-    return (
-        0x26,                  # 論理値。raw上では 0x62
-        @{$filename},
-        0xF5,
+    my $type     = 0x62;  # rawで見える値
+    my @filename = @{ _normalize_filename($opt{filename} // '') };
+    my @body     = _to_bytes($opt{body});
+
+    my @meta_raw = (
         0x00, 0x00, 0x00, 0x60,
         ($start_addr >> 8) & 0xFF,
         $start_addr & 0xFF,
         ($end_offset >> 8) & 0xFF,
         $end_offset & 0xFF,
     );
+
+    my @out;
+
+    push @out, $type;
+
+    my @name_block = (@filename, 0xF5);
+    push @out, @name_block;
+    push @out, PCWAV::Common::checksum_old_logical(@name_block);
+
+    # binary meta も raw のまま 8byte + checksum
+    push @out, @meta_raw;
+    push @out, PCWAV::Common::checksum_old_logical(@meta_raw);
+
+    # body は raw側表現にしてから chunk checksum
+    my @body_raw = map { PCWAV::Common::nibswap($_) } @body;
+    push @out, _insert_old_checksums(@body_raw);
+
+    return wantarray ? @out : pack('C*', @out);
 }
 
-sub wrap_basic_payload {
-    my (%opt) = @_;
-    my @header = build_basic_header(%opt);
-    my @body   = _to_bytes($opt{body});
-    my @all    = (@header, @body);
-
-    return _pack_old_stream(@all);
-}
-
-sub wrap_binary_payload {
-    my (%opt) = @_;
-    my @header = build_binary_header(%opt);
-    my @body   = _to_bytes($opt{body});
-    my @all    = (@header, @body);
-
-    return _pack_old_stream(@all);
-}
+# -----------------------------
+# Decode
+# -----------------------------
 
 sub unwrap_payload {
     my ($raw) = @_;
     my @raw = _to_bytes($raw);
-    my @logical = map { PCWAV::Common::nibswap($_) } @raw;
-    my @stream  = _remove_old_checksums(@logical);
 
-    die "unwrap_payload: empty stream\n" unless @stream;
+    die "unwrap_payload: too short\n" unless @raw >= 10;
 
-    my $type = shift @stream;
+    # type は単独
+    my $type = shift @raw;
 
-    if ($type == 0x20 || $type == 0x21) {
-        my @filename = splice(@stream, 0, 7);
-        my $f5 = shift @stream;
-        die sprintf("unwrap_payload: invalid BASIC header terminator %02X\n", $f5)
-            unless defined $f5 && $f5 == 0xF5;
+    # filename(7)+F5
+    my @name_block = splice(@raw, 0, 8);
+    my $name_sum   = shift @raw;
+
+    die "unwrap_payload: truncated OLD filename block\n"
+        unless @name_block == 8 && defined $name_sum;
+
+    my @filename = @name_block[0 .. 6];
+    my $f5       = $name_block[7];
+
+    die sprintf("unwrap_payload: invalid OLD filename terminator %02X\n", $f5)
+        unless $f5 == 0xF5;
+
+    # 実機 raw では filename block 自体はそのまま見え、
+    # checksum byte は nibswap された見え方になる
+    my $want_name_sum = PCWAV::Common::checksum_old_logical(@name_block);
+    my $got_name_sum  = PCWAV::Common::nibswap($name_sum);
+
+    die sprintf("OLD filename checksum mismatch: got=%02X want=%02X\n", $got_name_sum, $want_name_sum)
+        if $got_name_sum != $want_name_sum;
+
+    if ($type == 0x02 || $type == 0x12) {
+        my @body_logical = _remove_old_checksums_body_stream(@raw);
 
         return {
-            kind      => 'basic',
-            password  => ($type == 0x21 ? 1 : 0),
-            type      => $type,
-            filename  => _decode_filename(@filename),
-            body_bytes => \@stream,
+            kind       => 'basic',
+            password   => ($type == 0x12 ? 1 : 0),
+            type       => $type,
+            filename   => _decode_filename_raw(@filename),
+            body_bytes => \@body_logical,
         };
     }
-    elsif ($type == 0x26) {
-        my @filename = splice(@stream, 0, 7);
-        my $f5 = shift @stream;
-        die sprintf("unwrap_payload: invalid BINARY header terminator %02X\n", $f5)
-            unless defined $f5 && $f5 == 0xF5;
+    elsif ($type == 0x62) {
+        die "unwrap_payload: truncated OLD binary metadata\n" unless @raw >= 9;
 
-        my @reserved = splice(@stream, 0, 4);
-        my $start_hi = shift @stream;
-        my $start_lo = shift @stream;
-        my $off_hi   = shift @stream;
-        my $off_lo   = shift @stream;
+        my @meta_raw = splice(@raw, 0, 8);
+        my $meta_sum = shift @raw;
 
-        die "unwrap_payload: truncated binary metadata\n"
-            unless defined $off_lo;
+        my $want_meta_sum = PCWAV::Common::checksum_old_logical(@meta_raw);
+        my $got_meta_sum  = PCWAV::Common::nibswap($meta_sum);
 
-        my $start_addr = ($start_hi << 8) | $start_lo;
-        my $end_offset = ($off_hi   << 8) | $off_lo;
+        die sprintf("OLD binary meta checksum mismatch: got=%02X want=%02X\n", $got_meta_sum, $want_meta_sum)
+            if $got_meta_sum != $want_meta_sum;
+
+        my @reserved = @meta_raw[0 .. 3];
+        my $start_addr = ($meta_raw[4] << 8) | $meta_raw[5];
+        my $end_offset = ($meta_raw[6] << 8) | $meta_raw[7];
+
+        my @body_logical = _remove_old_checksums_body_stream(@raw);
 
         return {
             kind       => 'binary',
             type       => $type,
-            filename   => _decode_filename(@filename),
+            filename   => _decode_filename_raw(@filename),
             reserved   => \@reserved,
             start_addr => $start_addr,
             end_offset => $end_offset,
-            body_bytes => \@stream,
+            body_bytes => \@body_logical,
         };
     }
     else {
-        die sprintf("unwrap_payload: unknown OLD logical type %02X\n", $type);
+        die sprintf("unwrap_payload: unknown OLD raw type %02X\n", $type);
     }
 }
 
-sub _pack_old_stream {
-    my (@logical) = @_;
-
-    my @with_sum = _insert_old_checksums(@logical);
-    #my @raw      = map { PCWAV::Common::nibswap($_) } @with_sum;
-
-    #return wantarray ? @raw : pack('C*', @raw);
-    
-    # OLD の WAV 化では encode_byte_old() 側で nibble 順が効くので、
-    # ここでは nibswap しない
-    return wantarray ? @with_sum : pack('C*', @with_sum);
-}
+# -----------------------------
+# Internal helpers
+# -----------------------------
 
 sub _insert_old_checksums {
     my (@bytes) = @_;
@@ -149,28 +175,63 @@ sub _insert_old_checksums {
     return @out;
 }
 
-sub _remove_old_checksums {
-    my (@bytes) = @_;
+sub _remove_old_checksums_body {
+    my (@raw_body) = @_;
     my @out;
 
-    while (@bytes > $CHUNK_SIZE) {
-        last if @bytes <= $CHUNK_SIZE;
+    while (@raw_body >= $CHUNK_SIZE + 1) {
+        my @chunk_raw = splice(@raw_body, 0, $CHUNK_SIZE);
+        my $sum_raw   = shift @raw_body;
 
-        if (@bytes >= $CHUNK_SIZE + 1) {
-            my @chunk = splice(@bytes, 0, $CHUNK_SIZE);
-            if (@bytes > 0) {
-                my $sum  = shift @bytes;
-                my $want = PCWAV::Common::checksum_old_logical(@chunk);
-                die sprintf(
-                    "OLD checksum mismatch: got=%02X want=%02X\n",
-                    $sum, $want
-                ) if $sum != $want;
-            }
-            push @out, @chunk;
-        }
+        # body chunk は rawでは nibswap 後に見えている。
+        # checksum は logical値に対して計算され、保存時に nibswap された値になる。
+        my @chunk_logical = map { PCWAV::Common::nibswap($_) } @chunk_raw;
+        my $got           = PCWAV::Common::nibswap($sum_raw);
+        my $want          = PCWAV::Common::checksum_old_logical(@chunk_logical);
+
+        die sprintf("OLD checksum mismatch: got=%02X want=%02X\n", $got, $want)
+            if $got != $want;
+
+        push @out, @chunk_logical;
     }
 
-    push @out, @bytes;
+    # 最後の余りは checksum なし。logical に戻して返す
+    push @out, map { PCWAV::Common::nibswap($_) } @raw_body;
+
+    return @out;
+}
+
+sub _remove_old_checksums_body_stream {
+    my (@raw_body) = @_;
+
+    my @out;
+
+    my $check_sum = 0;
+    my $sc        = 0;
+    my $sc_next   = 8;
+
+    for my $raw (@raw_body) {
+        my $logical = PCWAV::Common::nibswap($raw);
+
+        if ($sc == $sc_next) {
+            my $read_sum = $logical;
+
+            die sprintf("OLD checksum mismatch: got=%02X want=%02X\n", $read_sum, $check_sum)
+                if $check_sum != $read_sum;
+
+            # 以後も累積のまま次の8byteへ
+            $sc_next = $sc + 8;
+            next;
+        }
+
+        $check_sum += ($logical & 0xF0) >> 4;
+        $check_sum = ($check_sum + 1) & 0xFF if $check_sum > 0xFF;
+        $check_sum = ($check_sum + ($logical & 0x0F)) & 0xFF;
+
+        $sc++;
+        push @out, $logical;
+    }
+
     return @out;
 }
 
@@ -180,30 +241,51 @@ sub _normalize_filename {
     $name =~ s/\.[^.]+$//;
     $name =~ s/[^A-Z0-9]//g;
     $name = substr($name, 0, 7);
-    $name .= '0' x (7 - length($name));
 
-    my @bytes = map { _filename_char_to_code($_) } split //, $name;
+    # 実機 raw では逆順に見える
+    my @chars = reverse split //, $name;
+    my @bytes = map { _filename_char_to_code($_) } @chars;
+
+    # 空きは 0x00 埋め
+    while (@bytes < 7) {
+        unshift @bytes, 0x00;
+    }
+
     return \@bytes;
 }
 
-sub _decode_filename {
+sub _decode_filename_raw {
     my (@bytes) = @_;
-    my $name = join '', map { _filename_code_to_char($_) } @bytes;
-    $name =~ s/0+$//;
-    return $name;
+
+    my @chars;
+    for my $b (@bytes) {
+        next if $b == 0x00;
+        push @chars, _filename_code_to_char($b);
+    }
+
+    return join('', reverse @chars);
 }
 
 sub _filename_char_to_code {
     my ($ch) = @_;
-    return 0x40 + ord($ch) - ord('0') if $ch ge '0' && $ch le '9';
-    return 0x51 + ord($ch) - ord('A') if $ch ge 'A' && $ch le 'Z';
-    die "invalid OLD filename char: $ch\n";
+
+    if ($ch ge '0' && $ch le '9') {
+        return 0x40 + ord($ch) - ord('0');
+    }
+    elsif ($ch ge 'A' && $ch le 'Z') {
+        return 0x51 + ord($ch) - ord('A');
+    }
+    else {
+        die "invalid OLD filename char: $ch\n";
+    }
 }
 
 sub _filename_code_to_char {
     my ($b) = @_;
+
     return chr(ord('0') + ($b - 0x40)) if $b >= 0x40 && $b <= 0x49;
     return chr(ord('A') + ($b - 0x51)) if $b >= 0x51 && $b <= 0x6A;
+
     return '?';
 }
 
