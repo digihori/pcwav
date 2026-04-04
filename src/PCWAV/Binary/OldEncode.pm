@@ -37,7 +37,8 @@ sub encode_body {
 sub encode_payload {
     my (%opt) = @_;
 
-    my @body = _to_bytes(encode_body(%opt));
+    #my @body = _to_bytes(encode_body(%opt));
+    my @body = encode_body(%opt);
 
     my $start_addr = $opt{start_addr};
     die "encode_payload: start_addr is required\n"

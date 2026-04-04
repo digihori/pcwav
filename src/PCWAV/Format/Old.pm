@@ -28,11 +28,13 @@ sub wrap_basic_payload {
     # filename(7)+F5 が最初の 8byte ブロック
     my @name_block = (@filename, 0xF5);
     push @out, @name_block;
-    push @out, PCWAV::Common::checksum_old_logical(@name_block);
+    push @out, PCWAV::Common::nibswap(
+        PCWAV::Common::checksum_old_logical(@name_block)
+    );
 
     # body は論理値 -> raw側表現(nibswap) にしてから 8byte checksum
     my @body_raw = map { PCWAV::Common::nibswap($_) } @body;
-    push @out, _insert_old_checksums(@body_raw);
+    push @out, _insert_old_checksums_cumulative(@body_raw);
 
     return wantarray ? @out : pack('C*', @out);
 }
@@ -66,15 +68,19 @@ sub wrap_binary_payload {
 
     my @name_block = (@filename, 0xF5);
     push @out, @name_block;
-    push @out, PCWAV::Common::checksum_old_logical(@name_block);
+    push @out, PCWAV::Common::nibswap(
+        PCWAV::Common::checksum_old_logical(@name_block)
+    );
 
     # binary meta も raw のまま 8byte + checksum
     push @out, @meta_raw;
-    push @out, PCWAV::Common::checksum_old_logical(@meta_raw);
+    push @out, PCWAV::Common::nibswap(
+        PCWAV::Common::checksum_old_logical(@meta_raw)
+    );
 
     # body は raw側表現にしてから chunk checksum
     my @body_raw = map { PCWAV::Common::nibswap($_) } @body;
-    push @out, _insert_old_checksums(@body_raw);
+    push @out, _insert_old_checksums_cumulative(@body_raw);
 
     return wantarray ? @out : pack('C*', @out);
 }
@@ -169,6 +175,36 @@ sub _insert_old_checksums {
         my @chunk = splice(@bytes, 0, $CHUNK_SIZE);
         my $sum   = PCWAV::Common::checksum_old_logical(@chunk);
         push @out, @chunk, $sum;
+    }
+
+    push @out, @bytes;   # 端数には checksum なし
+    return @out;
+}
+
+sub _insert_old_checksums_cumulative {
+    my (@bytes) = @_;
+    my @out;
+
+    my $sum = 0;
+    my $chunk_no = 0;
+
+    while (@bytes >= $CHUNK_SIZE) {
+        my @chunk = splice(@bytes, 0, $CHUNK_SIZE);
+
+        for my $b (@chunk) {
+            $sum += ($b & 0xF0) >> 4;
+            $sum = ($sum + 1) & 0xFF if $sum > 0xFF;
+            $sum = ($sum + ($b & 0x0F)) & 0xFF;
+        }
+
+        #print STDERR sprintf(
+        #    "ENC CHK #%d chunk=%s sum=%02X\n",
+        #    $chunk_no,
+        #    join(' ', map { sprintf '%02X', $_ } @chunk),
+        #    $sum,
+        #);
+        push @out, @chunk, PCWAV::Common::nibswap($sum);
+        $chunk_no++;
     }
 
     push @out, @bytes;   # 端数には checksum なし

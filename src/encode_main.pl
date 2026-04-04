@@ -27,7 +27,7 @@ MSG
 sub encode_s1bin {
     my ($input, $output, $filename, $addr) = @_;
 
-    $filename = defined $filename ? $filename : 'NONAME';
+    $filename = defined $filename ? $filename : '';
     $addr     = defined $addr ? PCWAV::Common::parse_num($addr) : 0xC000;
 
     my $bin   = PCWAV::Common::read_file_bin($input);
@@ -47,7 +47,7 @@ sub encode_s1bin {
 sub encode_s1basic {
     my ($input, $output, $filename) = @_;
 
-    $filename = defined $filename ? $filename : 'NONAME';
+    $filename = defined $filename ? $filename : '';
 
     my $text = PCWAV::Common::read_file_bin($input);
     my $payload = PCWAV::Basic::S1Encode::encode_s1_basic_text($text, $filename);
@@ -60,7 +60,7 @@ sub encode_s1basic {
 
 sub encode_s2basic {
     my ($input, $output, $filename, $type) = @_;
-    $filename = defined $filename ? $filename : 'NONAME';
+    $filename = defined $filename ? $filename : '';
 
     my $type_num = defined $type ? PCWAV::Common::parse_num($type) : 0x27;
 
@@ -77,7 +77,7 @@ sub encode_s2basic {
 sub encode_oldbin {
     my ($input, $output, $filename, $addr) = @_;
 
-    $filename = defined $filename ? $filename : 'NONAME';
+    $filename = defined $filename ? $filename : '';
     $addr     = defined $addr ? PCWAV::Common::parse_num($addr) : 0xC000;
 
     my $bin   = PCWAV::Common::read_file_bin($input);
@@ -98,7 +98,7 @@ sub encode_oldbin {
 sub encode_oldbasic {
     my ($input, $output, $filename) = @_;
 
-    $filename = defined $filename ? $filename : 'NONAME';
+    $filename = defined $filename ? $filename : '';
 
     my $text = PCWAV::Common::read_file_bin($input);
     my $payload = PCWAV::Basic::OldEncode::encode_payload(

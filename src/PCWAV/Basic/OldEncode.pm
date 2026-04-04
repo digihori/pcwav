@@ -74,7 +74,8 @@ sub encode_body {
 
 sub encode_payload {
     my (%opt) = @_;
-    my @body = _to_bytes(encode_body($opt{text}));
+
+    my @body = encode_body($opt{text});
 
     return PCWAV::Format::Old::wrap_basic_payload(
         filename => ($opt{filename} // ''),

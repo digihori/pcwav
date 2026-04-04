@@ -68,18 +68,26 @@ sub encode_byte_old {
     my $w1 = w1_old();
     my $w0 = w0_old();
     my $out = '';
+
     $out .= $w0;
-    $out .= (($v & 0x10) ? $w1 : $w0);
-    $out .= (($v & 0x20) ? $w1 : $w0);
-    $out .= (($v & 0x40) ? $w1 : $w0);
-    $out .= (($v & 0x80) ? $w1 : $w0);
-    $out .= $w1 x 4;
-    $out .= $w0;
+
+    # low nibble first
     $out .= (($v & 0x01) ? $w1 : $w0);
     $out .= (($v & 0x02) ? $w1 : $w0);
     $out .= (($v & 0x04) ? $w1 : $w0);
     $out .= (($v & 0x08) ? $w1 : $w0);
+
+    $out .= $w1 x 4;
+    $out .= $w0;
+
+    # high nibble next
+    $out .= (($v & 0x10) ? $w1 : $w0);
+    $out .= (($v & 0x20) ? $w1 : $w0);
+    $out .= (($v & 0x40) ? $w1 : $w0);
+    $out .= (($v & 0x80) ? $w1 : $w0);
+
     $out .= $w1 x 5;
+
     return $out;
 }
 
