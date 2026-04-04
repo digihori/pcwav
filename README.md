@@ -19,8 +19,8 @@ SHARP ポケットコンピュータ（SC61860系）のカセットデータ（W
 
 ## 使い方
 
-### Encode
-
+### Encode / Decode
+```bash
 perl src/encode_main.pl oldbasic input.bas output.wav [filename]
 perl src/encode_main.pl oldbin   input.bin output.wav [filename] [addr]
 
@@ -29,7 +29,7 @@ perl src/encode_main.pl s1bin    input.bin output.wav [filename] [addr]
 
 perl src/encode_main.pl s2basic  input.bas output.wav [filename]
 
-### Decode
+
 perl src/decode_main.pl raw      input.wav output.bin
 
 perl src/decode_main.pl oldbasic input.wav output.bas
