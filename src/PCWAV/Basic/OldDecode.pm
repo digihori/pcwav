@@ -54,6 +54,19 @@ my %TOKEN = (
     0xDC => 'AREAD', 0xDD => 'USING', 0xDE => 'RETURN', 0xDF => 'RESTORE',
 );
 
+my %SPACE_AROUND_TOKENS = map { $_ => 1 } qw(
+    TO STEP THEN ON AND OR
+);
+
+my %SPACE_AFTER_TOKENS = map { $_ => 1 } qw(
+    RUN NEW MEM LIST CONT DEBUG CSAVE CLOAD MARGE TRON TROFF PASS LLIST PI
+    OUTSTAT INSTAT GRAD PRINT INPUT RADIAN DEGREE CLEAR CALL DIM DATA ON OFF
+    POKE READ IF FOR LET REM END NEXT STOP GOTO GOSUB CHAIN PAUSE BEEP AREAD
+    USING RETURN RESTORE ASC VAL LEN NOT SQR CHR$ COM$ INKEY$ STR$ LEFT$
+    RIGHT$ MID$ RANDOM WAIT ERROR KEY SETCOM ROM LPRINT SIN COS TAN ASN ACS
+    ATN EXP LN LOG INT ABS SGN DEG DMS RND PEEK
+);
+
 sub decode_payload {
     my ($raw_or_payload) = @_;
 
@@ -63,9 +76,7 @@ sub decode_payload {
 
     my $text = decode_body($info->{body_bytes});
 
-    return wantarray
-        ? ($text, $info)
-        : $text;
+    return wantarray ? ($text, $info) : $text;
 }
 
 sub decode_body {
@@ -85,32 +96,156 @@ sub decode_body {
         my $line_no = _decode_line_number_bcd($b[$pos], $b[$pos + 1]);
         $pos += 2;
 
-        my $stmt = '';
-        my $in_quote = 0;
-        my $after_rem = 0;
-
+        my @line_bytes;
         while ($pos < @b) {
             my $c = $b[$pos++];
             last if $c == 0x00;
-
-            my $text = exists $TOKEN{$c}
-                ? $TOKEN{$c}
-                : sprintf('\\x%02X', $c);
-
-            $stmt .= $text;
-
-            if (!$after_rem && $c == 0x12) {
-                $in_quote = !$in_quote;
-            }
-            if (!$in_quote && $c == 0xD3) {
-                $after_rem = 1;
-            }
+            push @line_bytes, $c;
         }
+
+        #my @items = _decode_line_items(\@line_bytes);
+        #my $stmt  = _format_items(@items);
+        my $stmt = _decode_line_items(\@line_bytes);
 
         push @lines, sprintf('%d:%s', $line_no, $stmt);
     }
 
     return join('', map { "$_\n" } @lines);
+}
+
+sub _decode_line_items {
+    my ($bytes_ref) = @_;
+    my @bytes = @$bytes_ref;
+    my @items;
+
+    my $in_quote  = 0;
+    my $after_rem = 0;
+
+    for my $c (@bytes) {
+        if ($after_rem) {
+            push @items, { type => 'text', value => _decode_text_char($c) };
+            next;
+        }
+
+        if ($in_quote) {
+            my $ch = _decode_text_char($c);
+            push @items, { type => 'text', value => $ch };
+            if ($c == 0x12) {
+                $in_quote = 0;
+            }
+            next;
+        }
+
+        if ($c == 0x12) {
+            push @items, { type => 'text', value => '"' };
+            $in_quote = 1;
+            next;
+        }
+
+        # 文字コード領域
+        if (($c >= 0x11 && $c <= 0x1F) || ($c >= 0x30 && $c <= 0x6A)) {
+            push @items, { type => 'text', value => _decode_text_char($c) };
+            next;
+        }
+
+        my $tok = exists $TOKEN{$c} ? $TOKEN{$c} : undef;
+        if (!defined $tok) {
+            push @items, { type => 'text', value => sprintf('\\x%02X', $c) };
+            next;
+        }
+
+        push @items, { type => 'token', value => $tok };
+
+        if ($tok eq 'REM') {
+            $after_rem = 1;
+        }
+    }
+
+    return _format_items(@items);
+}
+
+sub _format_items {
+    my @items = @_;
+    my $out = '';
+
+    for (my $i = 0; $i < @items; $i++) {
+        my $cur  = $items[$i];
+        my $prev = $i > 0        ? $items[$i - 1] : undef;
+        my $next = $i < $#items  ? $items[$i + 1] : undef;
+
+        if ($cur->{type} eq 'text') {
+            $out .= $cur->{value};
+            next;
+        }
+
+        my $tok = $cur->{value};
+
+        if (_need_space_before_token($prev, $tok)) {
+            $out .= ' ' unless $out =~ / $/;
+        }
+
+        $out .= $tok;
+
+        if (_need_space_after_token($tok, $next)) {
+            $out .= ' ' unless $out =~ / $/;
+        }
+    }
+
+    # S1Decode.pm と同じ思想で最低限の後処理
+    $out =~ s/[ ]+:/:/g;
+    $out =~ s/:[ ]+/:/g;
+    $out =~ s/[ ]+$//;
+    $out =~ s/ {2,}/ /g;
+    $out =~ s/\( +/(/g;
+    $out =~ s/; +/;/g;
+
+    return $out;
+}
+
+sub _need_space_before_token {
+    my ($prev, $tok) = @_;
+    return 0 unless $prev;
+
+    return 1 if $SPACE_AROUND_TOKENS{$tok};
+
+    return 0 unless $prev->{type} eq 'text';
+
+    my $pv = $prev->{value};
+    return 0 unless length $pv;
+
+    my $ch = substr($pv, -1, 1);
+
+    # 英数字・$・"・) の直後なら区切る
+    return 1 if $ch =~ /[A-Za-z0-9\$\")]/;
+
+    return 0;
+}
+
+sub _need_space_after_token {
+    my ($tok, $next) = @_;
+    return 0 unless $next;
+
+    return 0 unless $SPACE_AROUND_TOKENS{$tok} || $SPACE_AFTER_TOKENS{$tok};
+
+    if ($next->{type} eq 'text') {
+        my $nv = $next->{value};
+
+        return 0 if $nv =~ /^ /;   # すでに空白
+        return 0 if $nv =~ /^\(/;  # 関数呼び出し風
+    }
+
+    return 1;
+}
+
+sub _decode_text_char {
+    my ($c) = @_;
+
+    return $TOKEN{$c} if exists $TOKEN{$c} && (
+        ($c >= 0x11 && $c <= 0x1F) ||
+        ($c >= 0x30 && $c <= 0x6A)
+    );
+
+    return sprintf('\\x%02X', $c);
 }
 
 sub _decode_line_number_bcd {
