@@ -12,6 +12,9 @@ use PCWAV::Basic::S1Encode;
 use PCWAV::Basic::S2Encode;
 use PCWAV::Binary::OldEncode;
 use PCWAV::Basic::OldEncode;
+use PCWAV::TextCodec qw(preprocess_escape);
+use Encode qw(decode);
+use utf8;
 
 sub usage {
     die <<'MSG';
@@ -50,6 +53,8 @@ sub encode_s1basic {
     $filename = defined $filename ? $filename : '';
 
     my $text = PCWAV::Common::read_file_bin($input);
+    $text = decode('UTF-8', $text);
+    $text = preprocess_escape($text);
     my $payload = PCWAV::Basic::S1Encode::encode_s1_basic_text($text, $filename);
     my @payload_bytes = PCWAV::Common::bytes_from_scalar($payload);
 
@@ -65,6 +70,8 @@ sub encode_s2basic {
     my $type_num = defined $type ? PCWAV::Common::parse_num($type) : 0x27;
 
     my $text = PCWAV::Common::read_file_bin($input);
+    $text = decode('UTF-8', $text);
+    $text = preprocess_escape($text);
     my $payload = PCWAV::Basic::S2Encode::encode_s2_basic_text($text, $filename, $type_num);
 
     my @payload_bytes = PCWAV::Common::bytes_from_scalar($payload);
@@ -101,6 +108,7 @@ sub encode_oldbasic {
     $filename = defined $filename ? $filename : '';
 
     my $text = PCWAV::Common::read_file_bin($input);
+    $text = preprocess_escape($text);
     my $payload = PCWAV::Basic::OldEncode::encode_payload(
         text     => $text,
         filename => $filename,

@@ -1,6 +1,7 @@
 package PCWAV::Basic::S1Decode;
 use strict;
 use warnings;
+use PCWAV::TextCodec qw(decode_text_for_s1);
 
 my %TOKEN_MAP = (
     0x80 => "\0",      0x81 => "REC",     0x82 => "POL",     0x83 => "ROT",
@@ -127,9 +128,6 @@ sub find_and_extract_basic {
 
         my @body = map { _nibble_swap($_) } @body_raw;
 
-warn sprintf("DEBUG extracted body bytes = %d\n", scalar(@body));
-warn sprintf("DEBUG terminator at raw pos = %d\n", $pos);
-
         return {
             offset     => $i,
             type_pos   => $type_pos,
@@ -211,16 +209,24 @@ sub _decode_line_tokens {
     my $in_quote  = 0;
     my $after_rem = 0;
 
-    for my $c (@bytes) {
-        if ($after_rem) {
-            push @items, { type => 'text', value => _decode_text_char($c) };
-            next;
-        }
+    for (my $i = 0; $i < @bytes; $i++) {
+        my $c = $bytes[$i];
 
-        if ($in_quote) {
-            my $ch = _decode_text_char($c);
+        if ($after_rem || $in_quote) {
+            if ($c == 0xFE) {
+                if ($i + 1 < @bytes) {
+                    my $next = $bytes[++$i];
+                    push @items, { type => 'text', value => decode_text_for_s1([0xFE, $next]) };
+                } else {
+                    push @items, { type => 'text', value => '\\xFE' };
+                }
+                next;
+            }
+
+            my $ch = decode_text_for_s1([$c]);
             push @items, { type => 'text', value => $ch };
-            if ($c == 0x22) {
+
+            if ($in_quote && $c == 0x22) {
                 $in_quote = 0;
             }
             next;
@@ -233,13 +239,13 @@ sub _decode_line_tokens {
         }
 
         if ($c >= 0x20 && $c <= 0x7E) {
-            push @items, { type => 'text', value => _decode_text_char($c) };
+            push @items, { type => 'text', value => decode_text_for_s1([$c]) };
             next;
         }
 
         my $tok = exists $TOKEN_MAP{$c} ? $TOKEN_MAP{$c} : undef;
         if (!defined $tok || $tok eq "\0") {
-            push @items, { type => 'text', value => '?' };
+            push @items, { type => 'text', value => sprintf('\\x%02X', $c) };
             next;
         }
 
@@ -267,6 +273,13 @@ sub _format_items {
         }
 
         my $tok = $cur->{value};
+        if ($tok eq 'REM') {
+            if (_need_space_before_token($prev, $tok)) {
+                $out .= ' ' unless $out =~ / $/;
+            }
+            $out .= 'REM ';
+            next;
+        }
 
         if (_need_space_before_token($prev, $tok)) {
             $out .= ' ' unless $out =~ / $/;
@@ -285,7 +298,7 @@ sub _format_items {
     $out =~ s/[ ]+$//;
 
     # 二重空白を1個に圧縮（文字列/REM中は items化の時点で保持済みなのでここは実質安全）
-    $out =~ s/ {2,}/ /g;
+    #$out =~ s/ {2,}/ /g;
 
     # ただし "( " は "(" に、"; " は ";" に寄せる
     $out =~ s/\( +/(/g;
@@ -333,11 +346,11 @@ sub _need_space_after_token {
     return 1;
 }
 
-sub _decode_text_char {
-    my ($c) = @_;
-    return chr($c) if $c >= 0x20 && $c <= 0x7E;
-    return '?';
-}
+#sub _decode_text_char {
+#    my ($c) = @_;
+#    return chr($c) if $c >= 0x20 && $c <= 0x7E;
+#    return '?';
+#}
 
 sub _nibble_swap {
     my ($v) = @_;

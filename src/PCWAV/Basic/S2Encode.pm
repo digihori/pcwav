@@ -2,6 +2,7 @@ package PCWAV::Basic::S2Encode;
 use strict;
 use warnings;
 use PCWAV::Common ();
+use PCWAV::TextCodec qw(encode_text_for_s2);
 
 my %TOKEN_TO_BYTE = (
     "RUN"      => 0x10, "NEW"      => 0x11, "CONT"     => 0x12, "PASS"     => 0x13,
@@ -176,7 +177,7 @@ sub _encode_statement {
 
         # quote mode
         if ($in_quote) {
-            push @out, ord($ch);
+            push @out, encode_text_for_s2($ch);
             $in_quote = 0 if $ch eq '"';
             $i++;
             next;
@@ -184,14 +185,14 @@ sub _encode_statement {
 
         # REM text mode
         if ($after_rem) {
-            push @out, ord($ch);
+            push @out, encode_text_for_s2($ch);
             $i++;
             next;
         }
 
         # quote start
         if ($ch eq '"') {
-            push @out, ord($ch);
+            push @out, encode_text_for_s2($ch);
             $in_quote = 1;
             $i++;
             next;
@@ -260,6 +261,13 @@ sub _encode_statement {
             $matched = 1;
 
             if ($tok eq 'REM') {
+                # REM直後の区切り用スペース/タブを1個だけ吸収
+                if ($i < $len) {
+                    my $next = substr($stmt, $i, 1);
+                    if ($next =~ /[ \t]/) {
+                        $i++;
+                    }
+                }
                 $after_rem = 1;
                 $line_ref_mode = '';
             }
@@ -287,11 +295,8 @@ sub _encode_statement {
         }
         next if $matched;
 
-        my $ord = ord($ch);
-        die sprintf("non-ASCII character 0x%02X in source\n", $ord)
-            if $ord < 0x20 || $ord > 0x7E;
-
-        push @out, $ord;
+        my @bytes = encode_text_for_s2($ch);
+        push @out, @bytes;
         $i++;
         $last_token = '';
     }

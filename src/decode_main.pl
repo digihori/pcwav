@@ -14,6 +14,7 @@ use PCWAV::Basic::S1Decode;
 use PCWAV::Basic::S2Decode;
 use PCWAV::Binary::OldDecode;
 use PCWAV::Basic::OldDecode;
+use Encode qw(encode);
 
 sub usage {
     die <<'MSG';
@@ -109,7 +110,7 @@ sub decode_s1basic {
     my $info = PCWAV::Basic::S1Decode::find_and_extract_basic($raw_ref);
     my $text = PCWAV::Basic::S1Decode::decode_s1_basic_body($info->{body_bytes});
 
-    PCWAV::Common::write_file_bin($output, $text);
+    PCWAV::Common::write_file_bin($output, encode('UTF-8', $text));
 
     print "wrote $output\n";
     printf "offset: %d\n", $info->{offset};
@@ -124,7 +125,7 @@ sub decode_s2basic {
     my $info = PCWAV::Basic::S2Decode::find_and_extract_basic($raw_ref);
     my $text = PCWAV::Basic::S2Decode::decode_s2_basic_body($info->{body_bytes});
 
-    PCWAV::Common::write_file_bin($output, $text);
+    PCWAV::Common::write_file_bin($output, encode('UTF-8', $text));
 
     print "wrote $output\n";
     printf "offset: %d\n", $info->{offset};

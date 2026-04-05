@@ -1,6 +1,7 @@
 package PCWAV::Basic::S2Decode;
 use strict;
 use warnings;
+use PCWAV::TextCodec qw(decode_text_for_s2);
 
 my %TOKEN_MAP = (
     0x10 => "RUN",     0x11 => "NEW",      0x12 => "CONT",     0x13 => "PASS",
@@ -233,13 +234,13 @@ sub _decode_line_tokens {
         my $c = $bytes[$i];
 
         if ($after_rem) {
-            push @items, { type => 'text', value => _decode_text_char($c) };
+            push @items, { type => 'text', value => decode_text_for_s2([$c]) };
             $i++;
             next;
         }
 
         if ($in_quote) {
-            my $ch = _decode_text_char($c);
+            my $ch = decode_text_for_s2([$c]);
             push @items, { type => 'text', value => $ch };
             $in_quote = 0 if $c == 0x22;
             $i++;
@@ -256,7 +257,7 @@ sub _decode_line_tokens {
         # FE xx token
         if ($c == 0xFE) {
             if ($i + 1 >= @bytes) {
-                push @items, { type => 'text', value => '?' };
+                push @items, { type => 'text', value => '\\xFE' };
                 last;
             }
 
@@ -264,7 +265,7 @@ sub _decode_line_tokens {
             my $tok = exists $TOKEN_MAP{$t} ? $TOKEN_MAP{$t} : undef;
 
             if (!defined $tok || $tok eq "\0") {
-                push @items, { type => 'text', value => '?' };
+                push @items, { type => 'text', value => sprintf('\\x%02X\\x%02X', $c, $t) };
                 $i += 2;
                 next;
             }
@@ -278,7 +279,7 @@ sub _decode_line_tokens {
         # line reference: 1F hh ll
         if ($c == 0x1F) {
             if ($i + 2 >= @bytes) {
-                push @items, { type => 'text', value => '?' };
+                push @items, { type => 'text', value => '\\x1F' };
                 last;
             }
             my $ref_line = ($bytes[$i + 1] << 8) | $bytes[$i + 2];
@@ -288,12 +289,12 @@ sub _decode_line_tokens {
         }
 
         if ($c >= 0x20 && $c <= 0x7E) {
-            push @items, { type => 'text', value => _decode_text_char($c) };
+            push @items, { type => 'text', value => decode_text_for_s2([$c]) };
             $i++;
             next;
         }
 
-        push @items, { type => 'text', value => '?' };
+        push @items, { type => 'text', value => decode_text_for_s2([$c]) };
         $i++;
     }
 
@@ -315,6 +316,13 @@ sub _format_items {
         }
 
         my $tok = $cur->{value};
+        if ($tok eq 'REM') {
+            if (_need_space_before_token($prev, $tok)) {
+                $out .= ' ' unless $out =~ / $/;
+            }
+            $out .= 'REM ';
+            next;
+        }
 
         if (_need_space_before_token($prev, $tok)) {
             $out .= ' ' unless $out =~ / $/;
@@ -333,7 +341,7 @@ sub _format_items {
     $out =~ s/[ ]+$//;
 
     # 二重空白を1個に圧縮（文字列/REM中は items化の時点で保持済みなのでここは実質安全）
-    $out =~ s/ {2,}/ /g;
+    #$out =~ s/ {2,}/ /g;
 
     # ただし "( " は "(" に、"; " は ";" に寄せる
     $out =~ s/\( +/(/g;
@@ -389,11 +397,11 @@ sub _decode_reversed_name_7 {
     return $name;
 }
 
-sub _decode_text_char {
-    my ($c) = @_;
-    return chr($c) if $c >= 0x20 && $c <= 0x7E;
-    return '?';
-}
+#sub _decode_text_char {
+#    my ($c) = @_;
+#    return chr($c) if $c >= 0x20 && $c <= 0x7E;
+#    return '?';
+#}
 
 sub _nibble_swap {
     my ($v) = @_;
