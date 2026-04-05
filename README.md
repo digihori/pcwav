@@ -1,41 +1,217 @@
-# PCWAV
+そのまま GitHub に貼れる Markdown形式に整形しました。
 
-SHARP ポケットコンピュータ（SC61860系）のカセットデータ（WAV）を扱うツールです。
+# PCWAV 文字処理仕様（S1/S2対応）
 
-- WAV ↔ バイナリ / BASIC
-- OLD / S1 / S2 形式対応
+## 概要
 
----
+本ドキュメントは、PCWAV における BASIC テキストのエンコード／デコード処理における文字処理仕様を定義する。
 
-## 対応フォーマット
+対象フォーマット：
 
-| Format | BASIC | BIN |
-|--------|------|-----|
-| OLD    | ✓    | ✓   |
-| S1     | ✓    | ✓   |
-| S2     | ✓    | -   |
+- S1 BASIC（第2形式）
+- S2 BASIC（第3形式）
+
+OLD形式については本仕様の一部のみ適用される。
 
 ---
 
-## 使い方
+## 基本方針
 
-### Encode / Decode
-```bash
-perl src/encode_main.pl oldbasic input.bas output.wav [filename]
-perl src/encode_main.pl oldbin   input.bin output.wav [filename] [addr]
+文字処理は以下の原則に従う。
 
-perl src/encode_main.pl s1basic  input.bas output.wav [filename]
-perl src/encode_main.pl s1bin    input.bin output.wav [filename] [addr]
+1. **encode → decode の可逆性を最優先とする**
+2. 実機で扱えるバイト列を正確に再現する
+3. 表示整形（スペース等）は decode 時に行う
+4. 不明コードは `\xNN` 形式で表現する
 
-perl src/encode_main.pl s2basic  input.bas output.wav [filename]
+---
+
+## 文字分類
+
+入力テキストは以下に分類される。
+
+### 1. ASCII文字
+- 範囲：`0x20 - 0x7E`
+- そのまま1バイトとして扱う
+
+### 2. アルファベット小文字
+- ASCIIとしてそのまま扱う（例：`a = 0x61`）
+
+---
+
+### 3. 半角カナ（Unicode入力）
+
+Unicode半角カナを内部コードへ変換する。
+
+#### S1
+
+FE + SJIS半角カナコード
 
 
-perl src/decode_main.pl raw      input.wav output.bin
+#### S2
 
-perl src/decode_main.pl oldbasic input.wav output.bas
-perl src/decode_main.pl oldbin   input.wav output.bin
+SJIS半角カナコード（単バイト）
 
-perl src/decode_main.pl s1basic  input.wav output.bas
-perl src/decode_main.pl s1bin    input.wav output.bin
 
-perl src/decode_main.pl s2basic  input.wav output.bas
+例：
+
+| 文字 | S1       | S2   |
+|------|----------|------|
+| ｱ    | FE B1    | B1   |
+
+---
+
+### 4. 濁点・半濁点
+
+- 1文字ではなく **2文字として扱う**
+
+例：
+
+
+ﾊﾟ = ﾊ + ﾟ
+
+
+#### S1
+
+FE CA + FE DF
+
+
+#### S2
+
+CA + DF
+
+
+---
+
+### 5. 特殊文字（ポケコン固有）
+
+例：
+
+- √
+- π
+- 黒塗りブロック
+
+これらは機種依存でコードが異なるため、以下の方針とする。
+
+---
+
+## `\xNN` 表現
+
+### 目的
+
+機種依存の特殊文字や未定義コードを扱うため、  
+**1バイト値を明示的に記述可能にする**
+
+### 書式
+
+
+\xNN
+
+
+例：
+
+```basic
+PRINT "\xFB"
+X=\xFC5
+encode時の処理
+前処理
+
+\xNN は一時的に Private Use Area に変換される：
+
+\xNN → U+E0NN
+
+この値は内部処理専用の sentinel とする。
+
+encode_text処理
+
+各文字に対して以下を適用する：
+
+ASCII → そのまま
+半角カナ → S1/S2ルールで変換
+PUA（U+E000〜U+E0FF） → 元の1バイトに戻す
+その他 → \xNN に変換
+decode時の処理
+
+各バイト列を以下のルールで文字列化する：
+
+ASCII → そのまま
+半角カナ → Unicode半角カナへ変換
+その他のバイト → \xNN 形式で出力
+REM文の扱い
+encode時
+REM aaa
+
+の最初のスペースは構文上の区切りのため削除する。
+
+ルール
+REM直後の空白（1個のみ）は削除
+2個目以降はデータとして保持
+
+例：
+
+REM aaa   → 内部: "aaa"
+REM  aaa  → 内部: " aaa"
+decode時
+REM の後ろには常にスペースを1つ補う
+
+例：
+
+内部: D7 61 61 61       → REM aaa
+内部: D7 20 61 61 61    → REM  aaa
+スペース処理
+encode時：トークン外の空白は無視
+decode時：整形ルールに従って補完
+
+※ 連続スペースは圧縮しない
+
+可逆性
+
+以下の変換は可逆である：
+
+BASIC → encode → WAV → decode → BASIC
+
+ただし以下は例外：
+
+機種依存文字（意味は保持されない場合あり）
+表示整形（スペース位置など）
+実機互換性
+
+確認済み：
+
+S1形式：実機ロード成功
+S2形式：実機ロード成功
+実機WAVのdecode成功
+
+例：
+
+X=\xFC5
+
+→ 実機上で
+
+X=√5
+
+として表示されることを確認
+
+設計上の注意
+PUA使用について
+
+\xNN は内部的に以下の範囲で一時保持される：
+
+U+E000 - U+E0FF
+
+これは内部処理専用であり、ユーザー入力との衝突は想定しない。
+
+今後の拡張
+機種別プロファイル（PC-1401 / PC-1350 等）
+\PI, \SQR など論理表現への変換
+pretty-printモードの追加
+まとめ
+
+本実装により以下が実現された：
+
+半角カナ対応
+濁点対応
+小文字対応
+任意バイト入力（\xNN）
+S1/S2完全対応
+実機互換
