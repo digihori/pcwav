@@ -1,3 +1,5 @@
+our $PROGRAM_NAME;
+our $VERSION;
 use strict;
 use warnings;
 use FindBin;
@@ -16,15 +18,31 @@ use PCWAV::TextCodec qw(preprocess_escape);
 use Encode qw(decode);
 use utf8;
 
+sub prog_name {
+    return $PROGRAM_NAME
+        || do {
+            require File::Basename;
+            File::Basename::basename($0);
+        };
+}
+
 sub usage {
-    die <<'MSG';
+    my $prog = prog_name();
+    die <<"MSG";
 usage:
-  perl src/encode_main.pl s1bin    input.bin output.wav [filename] [addr]
-  perl src/encode_main.pl s1basic  input.bas output.wav [filename]
-  perl src/encode_main.pl s2basic  input.bas output.wav [filename]
-  perl src/encode_main.pl oldbin   input.bin output.wav [filename] [addr]
-  perl src/encode_main.pl oldbasic input.bas output.wav [filename]
+  perl $prog s1bin    input.bin output.wav [filename] [addr]
+  perl $prog s1basic  input.bas output.wav [filename]
+  perl $prog s2basic  input.bas output.wav [filename]
+  perl $prog oldbin   input.bin output.wav [filename] [addr]
+  perl $prog oldbasic input.bas output.wav [filename]
 MSG
+}
+
+sub show_banner {
+    my $name = prog_name();
+    my $ver = defined $VERSION ? $VERSION : 'dev';
+
+    print "$name version $ver\n";
 }
 
 sub encode_s1bin {
@@ -122,6 +140,7 @@ sub encode_oldbasic {
 }
 
 sub main {
+    show_banner();
     my @args = @ARGV;
     usage() unless @args >= 3;
 

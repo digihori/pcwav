@@ -1,3 +1,5 @@
+our $PROGRAM_NAME;
+our $VERSION;
 use strict;
 use warnings;
 use FindBin;
@@ -16,16 +18,32 @@ use PCWAV::Binary::OldDecode;
 use PCWAV::Basic::OldDecode;
 use Encode qw(encode);
 
+sub prog_name {
+    return $PROGRAM_NAME
+        || do {
+            require File::Basename;
+            File::Basename::basename($0);
+        };
+}
+
 sub usage {
-    die <<'MSG';
+    my $prog = prog_name();
+    die <<"MSG";
 usage:
-  perl src/decode_main.pl raw      input.wav output.bin
-  perl src/decode_main.pl s1bin    [--skip-ms 1000] [--skip-samples N] input.wav output.bin
-  perl src/decode_main.pl s1basic  [--skip-ms 1000] [--skip-samples N] input.wav output.bas
-  perl src/decode_main.pl s2basic  [--skip-ms 1000] [--skip-samples N] input.wav output.bas
-  perl src/decode_main.pl oldbin   [--skip-ms 1000] [--skip-samples N] input.wav output.bin
-  perl src/decode_main.pl oldbasic [--skip-ms 1000] [--skip-samples N] input.wav output.bas
+  perl $prog raw      input.wav output.bin
+  perl $prog s1bin    input.wav output.bin
+  perl $prog s1basic  input.wav output.bas
+  perl $prog s2basic  input.wav output.bas
+  perl $prog oldbin   input.wav output.bin
+  perl $prog oldbasic input.wav output.bas
 MSG
+}
+
+sub show_banner {
+    my $name = prog_name();
+    my $ver = defined $VERSION ? $VERSION : 'dev';
+
+    print "$name version $ver\n";
 }
 
 sub decode_raw {
@@ -164,6 +182,7 @@ sub decode_oldbasic {
 }
 
 sub main {
+    show_banner();
     my @args = @ARGV;
     usage() unless @args >= 3;
 
