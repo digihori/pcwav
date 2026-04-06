@@ -1,38 +1,212 @@
 use strict;
 use warnings;
-use File::Copy qw(copy);
 use File::Path qw(make_path remove_tree);
 use File::Basename qw(dirname);
-use File::Find;
+use File::Spec;
 
 my $SRC_DIR  = 'src';
 my $DIST_DIR = 'dist';
 
-sub wanted_copy {
-    my $src_path = $File::Find::name;
+my @ENTRY_SCRIPTS = qw(
+    encode_main.pl
+    decode_main.pl
+);
 
-    # ディレクトリはコピーしない
-    return if -d $src_path;
+my @LOCAL_PREFIXES = (
+    'PCWAV::',
+);
 
-    # src/ 直下からの相対パスを作る
-    my $rel_path = $src_path;
-    $rel_path =~ s{^\Q$SRC_DIR\E/?}{};
-
-    my $dst_path = "$DIST_DIR/$rel_path";
-    my $dst_dir  = dirname($dst_path);
-
-    make_path($dst_dir) unless -d $dst_dir;
-
-    copy($src_path, $dst_path)
-        or die "copy failed: $src_path -> $dst_path: $!";
-    print "copied: $src_path -> $dst_path\n";
+sub slurp_file {
+    my ($path) = @_;
+    open my $fh, '<', $path or die "open failed: $path: $!";
+    local $/;
+    my $s = <$fh>;
+    close $fh;
+    return $s;
 }
 
-if (-d $DIST_DIR) {
-    remove_tree($DIST_DIR) or die "remove_tree failed: $DIST_DIR";
+sub spew_file {
+    my ($path, $content) = @_;
+    my $dir = dirname($path);
+    make_path($dir) unless -d $dir;
+    open my $fh, '>', $path or die "open failed: $path: $!";
+    print {$fh} $content;
+    close $fh;
 }
-make_path($DIST_DIR);
 
-find({ wanted => \&wanted_copy, no_chdir => 1 }, $SRC_DIR);
+sub module_to_relpath {
+    my ($module) = @_;
+    return File::Spec->catfile(split(/::/, $module)) . '.pm';
+}
 
-print "build complete.\n";
+sub is_local_module {
+    my ($module) = @_;
+    for my $prefix (@LOCAL_PREFIXES) {
+        return 1 if index($module, $prefix) == 0;
+    }
+    return 0;
+}
+
+sub find_local_dependencies {
+    my ($content) = @_;
+    my @deps;
+    while ($content =~ /^\s*use\s+([A-Za-z_]\w*(?:::\w+)*)\b/gm) {
+        my $module = $1;
+        push @deps, $module if is_local_module($module);
+    }
+    return @deps;
+}
+
+sub build_dependency_order {
+    my (%args) = @_;
+    my $src_dir = $args{src_dir};
+    my @roots   = @{$args{roots}};
+
+    my %seen;
+    my @order;
+
+    my $visit;
+    $visit = sub {
+        my ($module) = @_;
+        return if $seen{$module}++;
+
+        my $rel  = module_to_relpath($module);
+        my $path = File::Spec->catfile($src_dir, $rel);
+        -f $path or die "local module not found: $module ($path)";
+
+        my $content = slurp_file($path);
+        for my $dep (find_local_dependencies($content)) {
+            $visit->($dep);
+        }
+        push @order, $module;
+    };
+
+    for my $root (@roots) {
+        $visit->($root);
+    }
+
+    return @order;
+}
+
+sub _rewrite_local_use_to_import_only {
+    my ($content) = @_;
+
+    my @lines = split /\n/, $content, -1;
+    for my $line (@lines) {
+        # use PCWAV::Foo;
+        if ($line =~ /^(\s*)use\s+(PCWAV::[A-Za-z_]\w*(?:::\w+)*)\s*;\s*(?:#.*)?$/) {
+            my ($indent, $module) = ($1, $2);
+            $line = "${indent}# bundled: use $module;";
+            next;
+        }
+
+        # use PCWAV::Foo qw(...);
+        if ($line =~ /^(\s*)use\s+(PCWAV::[A-Za-z_]\w*(?:::\w+)*)\s+(qw\(.*\))\s*;\s*(?:#.*)?$/) {
+            my ($indent, $module, $args) = ($1, $2, $3);
+            $line = "${indent}${module}->import($args);";
+            next;
+        }
+
+        # use PCWAV::Foo (...);
+        if ($line =~ /^(\s*)use\s+(PCWAV::[A-Za-z_]\w*(?:::\w+)*)\s+(.+?)\s*;\s*(?:#.*)?$/) {
+            my ($indent, $module, $args) = ($1, $2, $3);
+            $line = "${indent}${module}->import($args);";
+            next;
+        }
+    }
+
+    return join "\n", @lines;
+}
+
+sub rewrite_module_for_bundle {
+    my (%args) = @_;
+    my $module  = $args{module};
+    my $content = $args{content};
+
+    $content =~ s/^\s*use\s+lib\s+.*?;\s*\n//gm;
+    $content = _rewrite_local_use_to_import_only($content);
+
+    my $inc_key = module_to_relpath($module);
+    my $marker = "BEGIN { \$INC{'$inc_key'} = __FILE__; }\n";
+
+    return "{\n" . $marker . $content . "\n}\n";
+}
+
+sub rewrite_entry_script_for_bundle {
+    my ($content) = @_;
+
+    $content =~ s/^\#\!.*\n//;
+    $content =~ s/^\s*use\s+FindBin\s*;\s*\n//gm;
+    $content =~ s/^\s*use\s+lib\s+"\$FindBin::Bin(?:\/[^\"]*)?"\s*;\s*\n//gm;
+
+    $content = _rewrite_local_use_to_import_only($content);
+
+    return $content;
+}
+
+sub gather_root_modules_from_script {
+    my ($script_content) = @_;
+    my @mods;
+    while ($script_content =~ /^\s*use\s+([A-Za-z_]\w*(?:::\w+)*)\b/gm) {
+        my $module = $1;
+        push @mods, $module if is_local_module($module);
+    }
+    return @mods;
+}
+
+sub bundle_one_script {
+    my (%args) = @_;
+    my $src_dir      = $args{src_dir};
+    my $dist_dir     = $args{dist_dir};
+    my $entry_script = $args{entry_script};
+
+    my $entry_path = File::Spec->catfile($src_dir, $entry_script);
+    -f $entry_path or die "entry script not found: $entry_path";
+
+    my $entry_content = slurp_file($entry_path);
+    my @roots = gather_root_modules_from_script($entry_content);
+    my @order = build_dependency_order(src_dir => $src_dir, roots => \@roots);
+
+    my $out = '';
+    $out .= "#!/usr/bin/env perl\n";
+    $out .= "# AUTO-GENERATED BY build.pl. DO NOT EDIT DIRECTLY.\n\n";
+    $out .= "use utf8;\n\n";
+
+    for my $module (@order) {
+        my $path = File::Spec->catfile($src_dir, module_to_relpath($module));
+        my $content = slurp_file($path);
+        $out .= "# ----- BEGIN bundled module: $module -----\n";
+        $out .= rewrite_module_for_bundle(module => $module, content => $content);
+        $out .= "\n# ----- END bundled module: $module -----\n\n";
+    }
+
+    $out .= "# ----- BEGIN entry script: $entry_script -----\n";
+    $out .= "{\n";
+    $out .= rewrite_entry_script_for_bundle($entry_content);
+    $out .= "\n}\n";
+    $out .= "# ----- END entry script: $entry_script -----\n";
+
+    my $dst_path = File::Spec->catfile($dist_dir, $entry_script);
+    spew_file($dst_path, $out);
+    chmod 0755, $dst_path;
+    print "bundled: $entry_path -> $dst_path\n";
+}
+
+sub main {
+    if (-d $DIST_DIR) {
+        remove_tree($DIST_DIR) or die "remove_tree failed: $DIST_DIR";
+    }
+    make_path($DIST_DIR);
+
+    for my $entry (@ENTRY_SCRIPTS) {
+        bundle_one_script(
+            src_dir      => $SRC_DIR,
+            dist_dir     => $DIST_DIR,
+            entry_script => $entry,
+        );
+    }
+
+    print "build complete.\n";
+}
+
+main();
