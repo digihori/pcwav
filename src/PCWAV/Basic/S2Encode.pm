@@ -351,9 +351,18 @@ sub _encode_reversed_name_7 {
 sub _checksum_s2_basic_tail {
     my (@bytes) = @_;
     my $sum = 0;
+
     for my $b (@bytes) {
-        $sum = ($sum + ($b & 0x0F) + (($b >> 4) & 0x0F)) & 0xFF;
+        my $tmp = $sum + (($b & 0xF0) >> 4);
+
+        if ($tmp > 0xFF) {
+            ++$tmp;
+            $tmp &= 0xFF;
+        }
+
+        $sum = ($tmp + ($b & 0x0F)) & 0xFF;
     }
+
     return $sum;
 }
 

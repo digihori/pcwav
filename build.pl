@@ -4,7 +4,7 @@ use File::Path qw(make_path remove_tree);
 use File::Basename qw(dirname);
 use File::Spec;
 
-my $DIST_VERSION = '0.1';
+my $DIST_VERSION = '0.2';
 my $SRC_DIR  = 'src';
 my $DIST_DIR = 'dist';
 
