@@ -75,7 +75,10 @@ sub encode_s1basic {
     $text = preprocess_escape($text);
     my $payload = PCWAV::Basic::S1Encode::encode_s1_basic_text($text, $filename);
     my @payload_bytes = PCWAV::Common::bytes_from_scalar($payload);
-
+    # S1/S2 BASIC: real machines emit/expect an extra trailing FF byte
+    # after the logical terminator FF FF SUM. This is treated as a physical
+    # stream trailer, not as part of the BASIC payload.
+    push @payload_bytes, 0xFF;
     my $pcm = PCWAV::Binary::S1Encode::payload_to_pcm(@payload_bytes);
     PCWAV::WavWriter::write_wav_file($output, $pcm);
     print "wrote $output\n";
@@ -93,8 +96,11 @@ sub encode_s2basic {
     my $payload = PCWAV::Basic::S2Encode::encode_s2_basic_text($text, $filename, $type_num);
 
     my @payload_bytes = PCWAV::Common::bytes_from_scalar($payload);
+    # S1/S2 BASIC: real machines emit/expect an extra trailing FF byte
+    # after the logical terminator FF FF SUM. This is treated as a physical
+    # stream trailer, not as part of the BASIC payload.
+    push @payload_bytes, 0xFF;
     my $pcm = PCWAV::Binary::S1Encode::payload_to_pcm(@payload_bytes);
-
     PCWAV::WavWriter::write_wav_file($output, $pcm);
     print "wrote $output\n";
 }
