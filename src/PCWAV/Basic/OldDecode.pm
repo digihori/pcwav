@@ -179,6 +179,13 @@ sub _format_items {
         }
 
         my $tok = $cur->{value};
+        if ($tok eq 'REM') {
+            if (_need_space_before_token($prev, $tok)) {
+                $out .= ' ' unless $out =~ / $/;
+            }
+            $out .= 'REM ';
+            next;
+        }
 
         if (_need_space_before_token($prev, $tok)) {
             $out .= ' ' unless $out =~ / $/;
@@ -195,7 +202,7 @@ sub _format_items {
     $out =~ s/[ ]+:/:/g;
     $out =~ s/:[ ]+/:/g;
     $out =~ s/[ ]+$//;
-    $out =~ s/ {2,}/ /g;
+#    $out =~ s/ {2,}/ /g;
     $out =~ s/\( +/(/g;
     $out =~ s/; +/;/g;
 

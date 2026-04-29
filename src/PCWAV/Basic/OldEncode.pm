@@ -101,7 +101,7 @@ sub _split_line {
     $line =~ s/^\s+//;
 
     die "missing OLD line number: [$line]\n"
-        unless $line =~ /^(\d{1,3})(.*)$/;
+        unless $line =~ /^(\d+)(?=$|\s|:)(.*)$/;
 
     my $line_no = int($1);
     my $rest    = $2 // '';
@@ -193,6 +193,13 @@ sub _encode_statement {
                 $in_quote = 1;
             }
             elsif ($tok eq 'REM') {
+                # REM直後の区切り用スペース/タブを1個だけ吸収
+                if ($i < $len) {
+                    my $next = substr($stmt, $i, 1);
+                    if ($next =~ /[ \t]/) {
+                        $i++;
+                    }
+                }
                 $after_rem = 1;
             }
 
