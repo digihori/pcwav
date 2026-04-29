@@ -189,25 +189,30 @@ sub _insert_old_checksums_cumulative {
     my $chunk_no = 0;
 
     while (@bytes >= $CHUNK_SIZE) {
+        # OLD BASIC body checksum resets every 80 bytes
+        # = every 10 chunks of 8 bytes.
+        if ($chunk_no % 10 == 0) {
+            $sum = 0;
+        }
+
         my @chunk = splice(@bytes, 0, $CHUNK_SIZE);
 
         for my $b (@chunk) {
-            $sum += ($b & 0xF0) >> 4;
+            # @bytes are already raw-side bytes, i.e. nibble-swapped.
+            # Therefore logical high nibble corresponds to raw low nibble.
+            $sum += ($b & 0x0F);
             $sum = ($sum + 1) & 0xFF if $sum > 0xFF;
-            $sum = ($sum + ($b & 0x0F)) & 0xFF;
+
+            $sum = ($sum + (($b & 0xF0) >> 4)) & 0xFF;
         }
 
-        #print STDERR sprintf(
-        #    "ENC CHK #%d chunk=%s sum=%02X\n",
-        #    $chunk_no,
-        #    join(' ', map { sprintf '%02X', $_ } @chunk),
-        #    $sum,
-        #);
         push @out, @chunk, PCWAV::Common::nibswap($sum);
         $chunk_no++;
     }
 
-    push @out, @bytes;   # 端数には checksum なし
+    # Last partial block has no checksum.
+    push @out, @bytes;
+
     return @out;
 }
 
@@ -241,32 +246,37 @@ sub _remove_old_checksums_body_stream {
     my (@raw_body) = @_;
 
     my @out;
+    my $sum = 0;
+    my $chunk_no = 0;
 
-    my $check_sum = 0;
-    my $sc        = 0;
-    my $sc_next   = 8;
-
-    for my $raw (@raw_body) {
-        my $logical = PCWAV::Common::nibswap($raw);
-
-        if ($sc == $sc_next) {
-            my $read_sum = $logical;
-
-            die sprintf("OLD checksum mismatch: got=%02X want=%02X\n", $read_sum, $check_sum)
-                if $check_sum != $read_sum;
-
-            # 以後も累積のまま次の8byteへ
-            $sc_next = $sc + 8;
-            next;
+    while (@raw_body >= $CHUNK_SIZE + 1) {
+        if ($chunk_no % 10 == 0) {
+            $sum = 0;
         }
 
-        $check_sum += ($logical & 0xF0) >> 4;
-        $check_sum = ($check_sum + 1) & 0xFF if $check_sum > 0xFF;
-        $check_sum = ($check_sum + ($logical & 0x0F)) & 0xFF;
+        my @chunk_raw = splice(@raw_body, 0, $CHUNK_SIZE);
+        my $sum_raw   = shift @raw_body;
 
-        $sc++;
-        push @out, $logical;
+        for my $b (@chunk_raw) {
+            # raw-side nibble-swapped byte:
+            # logical high nibble is raw low nibble.
+            $sum += ($b & 0x0F);
+            $sum = ($sum + 1) & 0xFF if $sum > 0xFF;
+
+            $sum = ($sum + (($b & 0xF0) >> 4)) & 0xFF;
+        }
+
+        my $got = PCWAV::Common::nibswap($sum_raw);
+
+        die sprintf("OLD checksum mismatch: got=%02X want=%02X\n", $got, $sum)
+            if $got != $sum;
+
+        push @out, map { PCWAV::Common::nibswap($_) } @chunk_raw;
+        $chunk_no++;
     }
+
+    # Last partial block has no checksum.
+    push @out, map { PCWAV::Common::nibswap($_) } @raw_body;
 
     return @out;
 }
