@@ -226,7 +226,18 @@ sub _decode_line_tokens {
     my @bytes = @$bytes_ref;
 
     my @items;
-    my $in_quote = 0;
+    my @text_buf;
+
+    my $flush_text = sub {
+        return unless @text_buf;
+        push @items, {
+            type  => 'text',
+            value => decode_text_for_s2(\@text_buf),
+        };
+        @text_buf = ();
+    };
+
+    my $in_quote  = 0;
     my $after_rem = 0;
     my $i = 0;
 
@@ -234,21 +245,20 @@ sub _decode_line_tokens {
         my $c = $bytes[$i];
 
         if ($after_rem) {
-            push @items, { type => 'text', value => decode_text_for_s2([$c]) };
+            push @text_buf, $c;
             $i++;
             next;
         }
 
         if ($in_quote) {
-            my $ch = decode_text_for_s2([$c]);
-            push @items, { type => 'text', value => $ch };
+            push @text_buf, $c;
             $in_quote = 0 if $c == 0x22;
             $i++;
             next;
         }
 
         if ($c == 0x22) {
-            push @items, { type => 'text', value => '"' };
+            push @text_buf, $c;
             $in_quote = 1;
             $i++;
             next;
@@ -257,7 +267,7 @@ sub _decode_line_tokens {
         # FE xx token
         if ($c == 0xFE) {
             if ($i + 1 >= @bytes) {
-                push @items, { type => 'text', value => '\\xFE' };
+                push @text_buf, $c;
                 last;
             }
 
@@ -265,13 +275,16 @@ sub _decode_line_tokens {
             my $tok = exists $TOKEN_MAP{$t} ? $TOKEN_MAP{$t} : undef;
 
             if (!defined $tok || $tok eq "\0") {
-                push @items, { type => 'text', value => sprintf('\\x%02X\\x%02X', $c, $t) };
+                push @text_buf, $c, $t;
                 $i += 2;
                 next;
             }
 
+            $flush_text->();
+
             push @items, { type => 'token', value => $tok };
             $after_rem = 1 if $tok eq 'REM';
+
             $i += 2;
             next;
         }
@@ -279,24 +292,31 @@ sub _decode_line_tokens {
         # line reference: 1F hh ll
         if ($c == 0x1F) {
             if ($i + 2 >= @bytes) {
-                push @items, { type => 'text', value => '\\x1F' };
+                push @text_buf, $c;
                 last;
             }
+
+            $flush_text->();
+
             my $ref_line = ($bytes[$i + 1] << 8) | $bytes[$i + 2];
             push @items, { type => 'text', value => $ref_line };
+
             $i += 3;
             next;
         }
 
         if ($c >= 0x20 && $c <= 0x7E) {
-            push @items, { type => 'text', value => decode_text_for_s2([$c]) };
+            push @text_buf, $c;
             $i++;
             next;
         }
 
-        push @items, { type => 'text', value => decode_text_for_s2([$c]) };
+        # 半角カナ・漢字SJIS 2byte・未知byte は TextCodec 側で判定する
+        push @text_buf, $c;
         $i++;
     }
+
+    $flush_text->();
 
     return _format_items(@items);
 }

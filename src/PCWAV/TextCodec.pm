@@ -3,6 +3,7 @@ use strict;
 use warnings;
 use Exporter 'import';
 use utf8;
+use Encode qw(encode decode);
 
 our @EXPORT_OK = qw(
     preprocess_escape
@@ -59,6 +60,18 @@ sub _is_sjis_halfkana_byte {
     return defined($b) && $b >= 0xA1 && $b <= 0xDF;
 }
 
+sub _is_sjis_lead_byte {
+    my ($b) = @_;
+    return defined($b)
+        && (($b >= 0x81 && $b <= 0x9F) || ($b >= 0xE0 && $b <= 0xFC));
+}
+
+sub _is_sjis_trail_byte {
+    my ($b) = @_;
+    return defined($b)
+        && (($b >= 0x40 && $b <= 0x7E) || ($b >= 0x80 && $b <= 0xFC));
+}
+
 sub _encode_unknown_char_fallback {
     my ($ch) = @_;
     my $ord = ord($ch) & 0xFF;
@@ -100,21 +113,30 @@ sub encode_text_for_s2 {
     for my $ch (split //, $text) {
         my $ord = ord($ch);
 
+        # ASCII
         if ($ord >= 0x20 && $ord <= 0x7E) {
             push @out, $ord;
             next;
         }
 
-        if (exists $UNICODE_TO_SJIS_HALFKANA{$ch}) {
-            push @out, $UNICODE_TO_SJIS_HALFKANA{$ch};
-            next;
-        }
-
+        # \xNN sentinel
         if (_is_escaped_raw_char($ch)) {
             push @out, _escaped_raw_char_to_byte($ch);
             next;
         }
 
+        # Unicode -> CP932/SJIS
+        my $sjis;
+        eval {
+            $sjis = encode('CP932', $ch, Encode::FB_CROAK);
+        };
+
+        if (!$@ && defined $sjis) {
+            push @out, map { ord($_) } split //, $sjis;
+            next;
+        }
+
+        # fallback
         push @out, _encode_unknown_char_fallback($ch);
     }
 
@@ -178,16 +200,52 @@ sub decode_text_for_s1 {
 
 sub decode_text_for_s2 {
     my ($bytes_ref) = @_;
+    my @bytes = @$bytes_ref;
     my $out = '';
 
-    for my $b (@$bytes_ref) {
+    for (my $i = 0; $i < @bytes; $i++) {
+        my $b = $bytes[$i];
+
+        # ASCII
         if (_is_ascii_byte($b)) {
             $out .= chr($b);
-        } elsif (_is_sjis_halfkana_byte($b)) {
-            $out .= $SJIS_HALFKANA_TO_UNICODE{$b} // sprintf('\\x%02X', $b);
-        } else {
-            $out .= sprintf('\\x%02X', $b);
+            next;
         }
+
+        # 半角カナ
+        if (_is_sjis_halfkana_byte($b)) {
+            $out .= $SJIS_HALFKANA_TO_UNICODE{$b} // sprintf('\\x%02X', $b);
+            next;
+        }
+
+        # SJIS 2byte
+        if (_is_sjis_lead_byte($b)) {
+            if ($i + 1 < @bytes) {
+                my $b2 = $bytes[$i + 1];
+
+                if (_is_sjis_trail_byte($b2)) {
+                    my $sjis = chr($b) . chr($b2);
+                    my $ch;
+
+                    eval {
+                        $ch = decode('CP932', $sjis, Encode::FB_CROAK);
+                    };
+
+                    if (!$@ && defined $ch) {
+                        $out .= $ch;
+                        $i++;
+                        next;
+                    }
+                }
+            }
+
+            # lead byteだけ、または不正な2byte
+            $out .= sprintf('\\x%02X', $b);
+            next;
+        }
+
+        # その他
+        $out .= sprintf('\\x%02X', $b);
     }
 
     return $out;
