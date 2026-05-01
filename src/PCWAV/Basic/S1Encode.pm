@@ -22,11 +22,13 @@ my %TOKEN_TO_BYTE = (
 
     "RUN"     => 0xB0, "NEW"     => 0xB1, "CONT"    => 0xB2, "PASS"    => 0xB3,
     "LIST"    => 0xB4, "LLIST"   => 0xB5, "CSAVE"   => 0xB6, "CLOAD"   => 0xB7,
+    "MARGE"   => 0xB8, "OPEN"    => 0xBB,
+    "CLOSE"   => 0xBC, "SAVE"    => 0xBD, "LOAD"    => 0xBE, "CONSOLE" => 0xBF,
 
     "RANDOM"  => 0xC0, "DEGREE"  => 0xC1, "RADIAN"  => 0xC2, "GRAD"    => 0xC3,
     "BEEP"    => 0xC4, "WAIT"    => 0xC5, "GOTO"    => 0xC6, "TRON"    => 0xC7,
     "TROFF"   => 0xC8, "CLEAR"   => 0xC9, "USING"   => 0xCA, "DIM"     => 0xCB,
-    "CALL"    => 0xCC, "POKE"    => 0xCD,
+    "CALL"    => 0xCC, "POKE"    => 0xCD, "CLS"     => 0xCE, "CURSOR"  => 0xCF,
 
     "TO"      => 0xD0, "STEP"    => 0xD1, "THEN"    => 0xD2, "ON"      => 0xD3,
     "IF"      => 0xD4, "FOR"     => 0xD5, "LET"     => 0xD6, "REM"     => 0xD7,
@@ -34,7 +36,9 @@ my %TOKEN_TO_BYTE = (
     "DATA"    => 0xDC, "PAUSE"   => 0xDD, "PRINT"   => 0xDE, "INPUT"   => 0xDF,
 
     "GOSUB"   => 0xE0, "AREAD"   => 0xE1, "LPRINT"  => 0xE2, "RETURN"  => 0xE3,
-    "RESTORE" => 0xE4,
+    "RESTORE" => 0xE4, "CHAIN"   => 0xE5, "GCURSOR" => 0xE6, "GPRINT"  => 0xE7,
+    "LINE"    => 0xE8, "POINT"   => 0xE9, "PSET"    => 0xEA, "PRESET"  => 0xEB,
+    "BASIC"   => 0xEC, "TEXT"    => 0xED, 'OPEN$'   => 0xEE,
 );
 
 my @TOKENS_DESC = sort {

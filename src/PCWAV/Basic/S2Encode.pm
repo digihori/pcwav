@@ -16,7 +16,8 @@ my %TOKEN_TO_BYTE = (
     "TRON"     => 0x2C, "TROFF"    => 0x2D, "CLEAR"    => 0x2E, "USING"    => 0x2F,
 
     "DIM"      => 0x30, "CALL"     => 0x31, "POKE"     => 0x32, "GPRINT"   => 0x33,
-    "BASIC"    => 0x36, "TEXT"     => 0x37, "ERASE"    => 0x3A, "LFILES"   => 0x3B,
+    "PSET"     => 0x34, "PRESET"   => 0x35, "BASIC"    => 0x36, "TEXT"     => 0x37,
+    "WIDTH"    => 0x38, "ERASE"    => 0x3A, "LFILES"   => 0x3B,
     "KILL"     => 0x3C, "COPY"     => 0x3D, "NAME"     => 0x3E, "SET"      => 0x3F,
 
     "LTEXT"    => 0x40, "GRAPH"    => 0x41, "LF"       => 0x42, "CSIZE"    => 0x43,
@@ -29,6 +30,7 @@ my %TOKEN_TO_BYTE = (
 
     "PRINT"    => 0x60, "INPUT"    => 0x61, "GOSUB"    => 0x62, "AREAD"    => 0x63,
     "LPRINT"   => 0x64, "RETURN"   => 0x65, "RESTORE"  => 0x66, "CHAIN"    => 0x67,
+    "GCURSOR"  => 0x68, "LINE"     => 0x69,
     "LLINE"    => 0x6A, "RLINE"    => 0x6B, "GLCURSOR"=> 0x6C, "SORGN"    => 0x6D,
     "CROTATE"  => 0x6E, "CIRCLE"   => 0x6F,
 
@@ -46,17 +48,19 @@ my %TOKEN_TO_BYTE = (
     "DMS"      => 0x9C, "ASN"      => 0x9D, "ACS"      => 0x9E, "ATN"      => 0x9F,
 
     "RND"      => 0xA0, "AND"      => 0xA1, "OR"       => 0xA2, "NOT"      => 0xA3,
-    "PEEK"     => 0xA4, "XOR"      => 0xA5, "PI"       => 0xAE, "MEM"      => 0xAF,
+    "PEEK"     => 0xA4, "XOR"      => 0xA5,
+    "POINT"    => 0xAD, "PI"       => 0xAE, "MEM"      => 0xAF,
 
     "EOF"      => 0xB0, "DSKF"     => 0xB1, "LOF"      => 0xB2, "LOC"      => 0xB3,
     "NCR"      => 0xB6, "NRR"      => 0xB7,
 
     "ERN"      => 0xC0, "ERL"      => 0xC1,
 
-    "ASC"      => 0xD0, "VAL"      => 0xD1, "LEN"      => 0xD2,
+    "ASC"      => 0xD0, "VAL"      => 0xD1, "LEN"      => 0xD2,"KLEN"      => 0xD4,
 
+    'AKCNV$'   => 0xE0, 'KACNV$'   => 0xE1, 'JIS$'     => 0xE2,
     'OPEN$'    => 0xE8, 'INKEY$'   => 0xE9, 'MID$'     => 0xEA, 'LEFT$'    => 0xEB,
-    'RIGHT$'   => 0xEC,
+    'RIGHT$'   => 0xEC, 'KMID$'    => 0xED, 'KLEFT$'   => 0xEE, 'KRIGHT$'  => 0xEF,
 
     'CHR$'     => 0xF0, 'STR$'     => 0xF1, 'HEX$'     => 0xF2,
 );
@@ -317,7 +321,7 @@ sub _is_token_boundary {
         NEXT STOP RETURN RESTORE PAUSE WAIT DIM CALL POKE CLEAR RANDOM
         TRON TROFF RUN NEW CONT PASS LIST LLIST CSAVE CLOAD MERGE LOAD RENUM AUTO DELETE
         FILES INIT CONVERT OPEN CLOSE SAVE CONSOLE USING BASIC TEXT ERASE LFILES KILL COPY
-        NAME SET LTEXT GRAPH LF CSIZE COLOR DEFDBL DEFSNG CLS CURSOR AREAD LPRINT CHAIN
+        NAME SET LTEXT GRAPH LF CSIZE COLOR DEFDBL DEFSNG CLS CURSOR GCURSOR AREAD LPRINT CHAIN
         PAINT OUTPUT APPEND AS ARUN AUTOGOTO ERROR
     );
 

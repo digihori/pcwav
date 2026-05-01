@@ -21,13 +21,13 @@ my %TOKEN_MAP = (
 
     0xB0 => "RUN",     0xB1 => "NEW",     0xB2 => "CONT",    0xB3 => "PASS",
     0xB4 => "LIST",    0xB5 => "LLIST",   0xB6 => "CSAVE",   0xB7 => "CLOAD",
-    0xB8 => "\0",      0xB9 => "\0",      0xBA => "\0",      0xBB => "\0",
-    0xBC => "\0",      0xBD => "\0",      0xBE => "\0",      0xBF => "\0",
+    0xB8 => "MARGE",   0xB9 => "\0",      0xBA => "\0",      0xBB => "OPEN",
+    0xBC => "CLOSE",   0xBD => "SAVE",    0xBE => "LOAD",    0xBF => "CONSOLE",
 
     0xC0 => "RANDOM",  0xC1 => "DEGREE",  0xC2 => "RADIAN",  0xC3 => "GRAD",
     0xC4 => "BEEP",    0xC5 => "WAIT",    0xC6 => "GOTO",    0xC7 => "TRON",
     0xC8 => "TROFF",   0xC9 => "CLEAR",   0xCA => "USING",   0xCB => "DIM",
-    0xCC => "CALL",    0xCD => "POKE",    0xCE => "\0",      0xCF => "\0",
+    0xCC => "CALL",    0xCD => "POKE",    0xCE => "CLS",     0xCF => "CURSOR",
 
     0xD0 => "TO",      0xD1 => "STEP",    0xD2 => "THEN",    0xD3 => "ON",
     0xD4 => "IF",      0xD5 => "FOR",     0xD6 => "LET",     0xD7 => "REM",
@@ -35,9 +35,9 @@ my %TOKEN_MAP = (
     0xDC => "DATA",    0xDD => "PAUSE",   0xDE => "PRINT",   0xDF => "INPUT",
 
     0xE0 => "GOSUB",   0xE1 => "AREAD",   0xE2 => "LPRINT",  0xE3 => "RETURN",
-    0xE4 => "RESTORE", 0xE5 => "\0",      0xE6 => "\0",      0xE7 => "\0",
-    0xE8 => "\0",      0xE9 => "\0",      0xEA => "\0",      0xEB => "\0",
-    0xEC => "\0",      0xED => "\0",      0xEE => "\0",      0xEF => "\0",
+    0xE4 => "RESTORE", 0xE5 => "CHAIN",   0xE6 => "GCURSOR", 0xE7 => "GPRINT",
+    0xE8 => "LINE",    0xE9 => "POINT",   0xEA => "PSET",    0xEB => "PRESET",
+    0xEC => "BASIC",   0xED => "TEXT",    0xEE => 'OPEN$',      0xEF => "\0",
 
     0xF0 => "\0",      0xF1 => "\0",      0xF2 => "\0",      0xF3 => "\0",
     0xF4 => "\0",      0xF5 => "\0",      0xF6 => "\0",      0xF7 => "\0",

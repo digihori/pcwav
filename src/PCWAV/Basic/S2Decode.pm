@@ -15,8 +15,8 @@ my %TOKEN_MAP = (
     0x2C => "TRON",    0x2D => "TROFF",    0x2E => "CLEAR",    0x2F => "USING",
 
     0x30 => "DIM",     0x31 => "CALL",     0x32 => "POKE",     0x33 => "GPRINT",
-    0x34 => "\0",      0x35 => "\0",       0x36 => "BASIC",    0x37 => "TEXT",
-    0x38 => "\0",      0x39 => "\0",       0x3A => "ERASE",    0x3B => "LFILES",
+    0x34 => "PSET",    0x35 => "PRESE",    0x36 => "BASIC",    0x37 => "TEXT",
+    0x38 => "WIDTH",   0x39 => "\0",       0x3A => "ERASE",    0x3B => "LFILES",
     0x3C => "KILL",    0x3D => "COPY",     0x3E => "NAME",     0x3F => "SET",
 
     0x40 => "LTEXT",   0x41 => "GRAPH",    0x42 => "LF",       0x43 => "CSIZE",
@@ -31,7 +31,7 @@ my %TOKEN_MAP = (
 
     0x60 => "PRINT",   0x61 => "INPUT",    0x62 => "GOSUB",    0x63 => "AREAD",
     0x64 => "LPRINT",  0x65 => "RETURN",   0x66 => "RESTORE",  0x67 => "CHAIN",
-    0x68 => "\0",      0x69 => "\0",       0x6A => "LLINE",    0x6B => "RLINE",
+    0x68 => "GCURSOR", 0x69 => "LINE",     0x6A => "LLINE",    0x6B => "RLINE",
     0x6C => "GLCURSOR",0x6D => "SORGN",    0x6E => "CROTATE",  0x6F => "CIRCLE",
 
     0x70 => "PAINT",   0x71 => "OUTPUT",   0x72 => "APPEND",   0x73 => "AS",
@@ -52,7 +52,7 @@ my %TOKEN_MAP = (
     0xA0 => "RND",     0xA1 => "AND",      0xA2 => "OR",       0xA3 => "NOT",
     0xA4 => "PEEK",    0xA5 => "XOR",      0xA6 => "\0",       0xA7 => "\0",
     0xA8 => "\0",      0xA9 => "\0",       0xAA => "\0",       0xAB => "\0",
-    0xAC => "\0",      0xAD => "\0",       0xAE => "PI",       0xAF => "MEM",
+    0xAC => "\0",      0xAD => "POINT",    0xAE => "PI",       0xAF => "MEM",
 
     0xB0 => "EOF",     0xB1 => "DSKF",     0xB2 => "LOF",      0xB3 => "LOC",
     0xB4 => "\0",      0xB5 => "\0",       0xB6 => "NCR",      0xB7 => "NRR",
@@ -65,14 +65,14 @@ my %TOKEN_MAP = (
     0xCC => "\0",      0xCD => "\0",       0xCE => "\0",       0xCF => "\0",
 
     0xD0 => "ASC",     0xD1 => "VAL",      0xD2 => "LEN",      0xD3 => "\0",
-    0xD4 => "\0",      0xD5 => "\0",       0xD6 => "\0",       0xD7 => "\0",
+    0xD4 => "KLEN",    0xD5 => "\0",       0xD6 => "\0",       0xD7 => "\0",
     0xD8 => "\0",      0xD9 => "\0",       0xDA => "\0",       0xDB => "\0",
     0xDC => "\0",      0xDD => "\0",       0xDE => "\0",       0xDF => "\0",
 
-    0xE0 => "\0",      0xE1 => "\0",       0xE2 => "\0",       0xE3 => "\0",
+    0xE0 => "AKCNV\$", 0xE1 => "KACNV\$",  0xE2 => "JIS\$",    0xE3 => "\0",
     0xE4 => "\0",      0xE5 => "\0",       0xE6 => "\0",       0xE7 => "\0",
     0xE8 => "OPEN\$",  0xE9 => "INKEY\$",  0xEA => "MID\$",    0xEB => "LEFT\$",
-    0xEC => "RIGHT\$", 0xED => "\0",       0xEE => "\0",       0xEF => "\0",
+    0xEC => "RIGHT\$", 0xED => "KMID\$",   0xEE => "KLEFT\$",  0xEF => "KRIGHT\$",
 
     0xF0 => "CHR\$",   0xF1 => "STR\$",    0xF2 => "HEX\$",    0xF3 => "\0",
     0xF4 => "\0",      0xF5 => "\0",       0xF6 => "\0",       0xF7 => "\0",
@@ -103,7 +103,7 @@ sub _token_needs_trailing_space {
         CSAVE OPEN CLOSE SAVE CONSOLE RANDOM DEGREE RADIAN GRAD BEEP WAIT GOTO TRON TROFF CLEAR USING
         DIM CALL POKE GPRINT BASIC TEXT ERASE LFILES KILL COPY NAME SET
         LTEXT GRAPH LF CSIZE COLOR DEFDBL DEFSNG
-        CLS CURSOR TO STEP THEN ON IF FOR LET REM END NEXT STOP READ DATA PAUSE
+        CLS PSET LINE CURSOR GCURSOR TO STEP THEN ON IF FOR LET REM END NEXT STOP READ DATA PAUSE
         PRINT INPUT GOSUB AREAD LPRINT RETURN RESTORE CHAIN
         PAINT OUTPUT APPEND AS ARUN AUTOGOTO ERROR
     );
