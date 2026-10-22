@@ -57,11 +57,13 @@ python3 tools/check_hardware_capture.py hardware-tests-0.5.2 S00120 /path/to/120
 shasum -a 256 dist/pcwav-encode.pl dist/pcwav-decode.pl
 ```
 
-生成先は未作成フォルダを指定する。原本は合成binのみ。ライセンス整備は引き続き別作業。
+生成先は未作成フォルダを指定する。原本は合成binのみ。ライセンスは作者了承により標準MITを採用（Copyright (c) 2026 digihori）。
+LICENSE/NOTICEをdistへ同梱し、両スクリプトにも全文を埋め込む。
+下記SHA-256はライセンス反映後の生成物。バージョンは0.5.2を維持。
 PGPは変更していない。PGPへはこの修正版commitから生成した2本を取り込む。
 暫定parse_num追加は不要で、取得元commit/version/SHA-256を更新する。
 
 ```text
-3af7b5871f44fe2113ec94682930ac855c309120ea46cad3c62299dacae8d671  pcwav-encode.pl
-4de1109697af337715a8febd164f940d9a06d9581d49e7ff4638fe2f31be4549  pcwav-decode.pl
+41d8de9e544e1511d687f555168bb093b790defffa5ee2c507eafda4919c7413  pcwav-encode.pl
+f8c86c8b5550bd1bc0816e3020f4c0a5a535e1b9583f2990dea4077684b5f875  pcwav-decode.pl
 ```
