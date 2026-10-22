@@ -21,7 +21,7 @@ Copyright (c) 2026 digihori
 S1 Binaryの最後のchunkは1〜120 bytesとして、BASICと同じ末尾規則に統一しました。
 PC-1360Kの実機CSAVE録音6件すべてが厳密な検証と原本比較に合格しています。
 [修正・検証・互換性・配布物の記録](docs/BUGFIX_0.5.2.md)を参照。
-新Encoderの120/240 bytesのWAVは`hardware-tests-0.5.2/`に生成済みで、実機CLOADは確認待ちです。
+2026-10-22、最終版の120/240 bytesのWAVもPC-1360KでCLOAD M成功を確認し、今回の不具合対応の実機検証を完了しました。
 
 ## 0.5.1 不具合修正
 
