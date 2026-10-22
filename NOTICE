@@ -4,13 +4,9 @@ SPDX-License-Identifier: MIT
 
 Reference acknowledgments
 
-The project author reports consulting the cassette-format specifications and
-behavior of cload.pl (Yagshi) and yasm.pl during development. These are reference
-acknowledgments, not a claim of authorship or a license grant for those tools.
-Third-party reference materials, including local files under ref/, retain their
-own terms and are not included in the pcwav standalone distribution.
+During development, cload.pl (Yagshi) and yasm.pl were used as references for
+cassette-format specifications and behavior.
 
-The repository history contains a yasm.pl compatibility comment. RawDecode.pm
-and the local cload.pl reference also have similar signal/synchronization logic
-and constants. The author's specification-reference explanation is recorded
-here; a comprehensive absence of third-party code derivation is not asserted.
+Third-party reference materials, including local files under ref/, retain their
+own terms and are not included in the pcwav standalone distribution. The MIT
+license for PCWAV does not grant rights to these reference materials.

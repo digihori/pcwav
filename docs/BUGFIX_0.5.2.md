@@ -1,7 +1,7 @@
 # pcwav 0.5.2 — PC-1360K実機録音に合わせたS1 Binary末尾修正
 
 0.5.1は、長さが120の倍数の場合に最後のchunkにも個別SUMを付け、tailをFFだけから計算していた。
-今回ユーザーが提供したPC-1360KのCSAVE M録音120/240 bytesにより、この想定を訂正した。
+PC-1360Kで取得したCSAVE M録音120/240 bytesにより、この想定を訂正した。
 
 ## 確定した処理
 
@@ -17,10 +17,10 @@ parse_numと用途別範囲検証も0.5.1の修正を維持する。
 
 ## 実機確認
 
-ユーザーにより0.5.1生成WAVの全6ケースのCLOAD M成功を確認済み。
+PC-1360Kで0.5.1生成WAVの全6ケースのCLOAD M成功を確認済み。
 再保存の001a/119/120/121/240/4112.wav（合成データの実機CSAVE録音）を0.5.2配布Decoderで検証し、
 すべて開始0x9000、指定長、全byte一致、header/metadata/chunk/tail checksum正常を確認した。
-初回001.wavはユーザーの保存範囲が2 bytesだったため、1 byteの再録音001a.wavで合格とした。
+初回001.wavは保存範囲を2 bytesに指定していたため、1 byteの再録音001a.wavで合格とした。
 
 | bytes | 最終chunk bytes | 実機tail SUM（格納値） |
 |---:|---:|---|
@@ -42,9 +42,9 @@ parse_numと用途別範囲検証も0.5.1の修正を維持する。
 誤った構造を黙って受理するfallbackは追加していない。原本binから再生成する。
 正常時の戻り値キーとCLIは0.5.1と同じで、footer_okは成功時1。
 
-修正版のテストデータは`hardware-tests-0.5.2/`へ別途生成した。
-以前の`hardware-tests/`は0.5.1ロード成功の証拠と混同しないよう保持した。
-2026-10-22、作者が最終版`hardware-tests-final-0.5.2/`の120/240 bytes WAVを
+修正版のテストデータは`.local/hardware-tests-0.5.2/`へ別途生成した。
+以前の`.local/hardware-tests/`は0.5.1ロード成功の証拠と混同しないよう保持した。
+2026-10-22、最終版`.local/hardware-tests-final-0.5.2/`の120/240 bytes WAVを
 PC-1360K、開始0x9000でCLOAD Mし、両方の正常終了を確認した。
 生成元は`aa47670e8845929842636c19a5500b475b0ba528`（MIT表記反映済み）。
 実機録音6件の厳密decode・原本一致と合わせ、今回の不具合対応の実機検証を完了した。
@@ -56,17 +56,17 @@ perl build.pl
 prove t/s1binary.t
 python3 t/test_cli.py
 python3 tools/make_hardware_tests.py --addr 0x9000 --output /tmp/pcwav-tests-0.5.2
-python3 tools/check_hardware_capture.py hardware-tests-0.5.2 S00120 /path/to/120.wav
+python3 tools/check_hardware_capture.py .local/hardware-tests-0.5.2 S00120 /path/to/120.wav
 shasum -a 256 dist/pcwav-encode.pl dist/pcwav-decode.pl
 ```
 
-生成先は未作成フォルダを指定する。原本は合成binのみ。ライセンスは作者了承により標準MITを採用（Copyright (c) 2026 digihori）。
+生成先は未作成フォルダを指定する。原本は合成binのみ。ライセンスは標準MITを採用（Copyright (c) 2026 digihori）。
 LICENSE/NOTICEをdistへ同梱し、両スクリプトにも全文を埋め込む。
 下記SHA-256はライセンス反映後の生成物。バージョンは0.5.2を維持。
 PGPは変更していない。PGPへはこの修正版commitから生成した2本を取り込む。
 暫定parse_num追加は不要で、取得元commit/version/SHA-256を更新する。
 
 ```text
-41d8de9e544e1511d687f555168bb093b790defffa5ee2c507eafda4919c7413  pcwav-encode.pl
-f8c86c8b5550bd1bc0816e3020f4c0a5a535e1b9583f2990dea4077684b5f875  pcwav-decode.pl
+68add4f0a8bcb2d22df3515965c4a9135918da153057e67e968d7d56bfbd1efd  pcwav-encode.pl
+0b74ec6101ffe775e29058ac2ee7882c69de298bedf382dbba2b3d2f894e0184  pcwav-decode.pl
 ```

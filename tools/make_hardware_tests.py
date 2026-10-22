@@ -45,7 +45,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--addr', required=True, type=lambda s: int(s, 0), help='Writable RAM start, e.g. 0x9000')
     parser.add_argument('--model', default='PC-1360K', help='Target model recorded in manifest')
-    parser.add_argument('--output', type=Path, default=ROOT / 'hardware-tests')
+    parser.add_argument('--output', type=Path, default=ROOT / '.local' / 'hardware-tests')
     args = parser.parse_args()
     if not 0 <= args.addr <= 65536 - 4112:
         parser.error('address must allow a 4112-byte region within 0x0000..0xFFFF')

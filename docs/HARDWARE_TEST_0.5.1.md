@@ -3,14 +3,14 @@
 
 # PC-1360K / S1 Binary 実機テスト
 
-修正版0.5.1。対象機種はPC-1360K、開始アドレスはユーザー指定の0x9000。
+修正版0.5.1。対象機種はPC-1360K、開始アドレスは0x9000。
 各ケースは同じ領域を上書きするため、1件ずつロード・保存・比較する。
 最大ケースの範囲は0x9000〜0xA00F。必要な既存データは事前に退避する。
 これは合成バイナリの転送テストであり、実行用プログラムではない。CALL/RUNは不要。
 
 ## テストデータ
 
-[生成済みフォルダ](../hardware-tests/)にbin（原本）、wav（転送用）、expected.raw（独立計算した転送バイト列）、
+[生成済みフォルダ](../.local/hardware-tests/)にbin（原本）、wav（転送用）、expected.raw（独立計算した転送バイト列）、
 actual.raw（生成WAVからの復元）、decoded.bin（生成WAVの事前復元）、manifest.jsonとSHA256SUMSがある。
 実機録音は含まない。各byteは `(offset * 73 + 19) & 0xFF` で生成する。
 
@@ -41,7 +41,7 @@ actual.raw（生成WAVからの復元）、decoded.bin（生成WAVの事前復�
 S00121の例（リポジトリ直下で実行）:
 
 ```sh
-python3 tools/check_hardware_capture.py hardware-tests S00121 /tmp/S00121-recorded.wav
+python3 tools/check_hardware_capture.py .local/hardware-tests S00121 /tmp/S00121-recorded.wav
 ```
 
 入力はDecoderが対応する32 kHz以下のWAVを使用する。
@@ -104,7 +104,7 @@ parse_numの確認は実機不要。`t/test_cli.py`は以下を実CLIで確認�
 
 ## 2026-10-22 実機録音の検証結果
 
-ユーザーより6件すべてのCLOAD M成功を受領。Downloadsの001/119/120/121/240/4112.wavを
+6件すべてのCLOAD M成功を実機で確認。Downloadsの001/119/120/121/240/4112.wavを
 読み取り専用で確認し、録音はリポジトリへコピーしていない。
 
 - 119/121/4112: 修正版の厳密Decoderでheader/metadata/chunk/tail検証成功。
@@ -125,6 +125,6 @@ Encoder生成WAVはロードに成功しているが、実機CSAVEと構造が�
 
 ### 1 byteケースの再録音
 
-ユーザーより初回001.wavは`CSAVE M &9000,&9001`で保存したとの説明を受領。
+初回001.wavは`CSAVE M &9000,&9001`で保存していた。
 再録音001a.wavは修正版の厳密Decoderでchecksum検証成功、開始0x9000、長さ1 byte、原本と全byte一致。
 S00001は合格。120/240 bytesの最終full chunk規則の再修正は引き続き必要。
