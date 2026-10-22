@@ -12,6 +12,8 @@ sub build_payload {
     my @bin  = @{$opt{bytes} || []};
     die "binary data is empty\n" unless @bin;
 
+    PCWAV::Common::validate_binary_range($addr, scalar @bin);
+
     my @payload;
     push @payload, 0x67;
 
@@ -41,7 +43,7 @@ sub build_payload {
     push @payload, @chunk if @chunk;
 
     push @payload, 0xFF;
-    my $tail_sum = PCWAV::Common::checksum_s1_logical(0xFF);
+    my $tail_sum = PCWAV::Common::checksum_s1_logical(@chunk, 0xFF);
     push @payload, 0xFF;
     push @payload, PCWAV::Common::nibswap($tail_sum);
 

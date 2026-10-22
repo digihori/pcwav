@@ -18,32 +18,34 @@ sub find_and_extract {
         my $meta_csum = $bytes[$i+18];
         next unless PCWAV::Common::nibswap(PCWAV::Common::checksum_s1_logical(@meta)) == $meta_csum;
 
-        my $addr = (($meta[4] << 8) | $meta[5]) & 0xFFFF;
-        my $len  = ((($meta[6] << 8) | $meta[7]) + 1) & 0xFFFF;
+        my $addr = ($meta[4] << 8) | $meta[5];
+        my $len  = (($meta[6] << 8) | $meta[7]) + 1;
+        PCWAV::Common::validate_binary_range($addr, $len);
 
         my $pos = $i + 19;
         my @body_raw;
         my $remaining = $len;
-
-        while ($remaining > 120) {
-            last if $pos + 120 >= @bytes;
+        while ($remaining >= 120) {
+            die "s1 binary truncated chunk at $pos\n" if $pos + 121 > @bytes;
             my @chunk = @bytes[$pos .. $pos + 119];
             $pos += 120;
             my $sum = $bytes[$pos++];
             my $expect = PCWAV::Common::nibswap(PCWAV::Common::checksum_s1_logical(@chunk));
-            next unless $sum == $expect;
+            die "s1 binary chunk checksum mismatch at " . ($pos - 1) . "\n"
+                unless $sum == $expect;
             push @body_raw, @chunk;
             $remaining -= 120;
         }
-
-        last if $pos + $remaining - 1 >= @bytes;
-        push @body_raw, @bytes[$pos .. $pos + $remaining - 1];
+        die "s1 binary truncated tail at $pos\n" if $pos + $remaining + 3 > @bytes;
+        my @partial = $remaining ? @bytes[$pos .. $pos + $remaining - 1] : ();
+        push @body_raw, @partial;
         $pos += $remaining;
-
-        my $footer_ok = 0;
-        if ($pos + 2 < @bytes && $bytes[$pos] == 0xFF && $bytes[$pos+1] == 0xFF) {
-            $footer_ok = 1;
-        }
+        die "s1 binary missing FF FF terminator at $pos\n"
+            unless $bytes[$pos] == 0xFF && $bytes[$pos+1] == 0xFF;
+        my $expect_tail = PCWAV::Common::nibswap(
+            PCWAV::Common::checksum_s1_logical(@partial, 0xFF));
+        die "s1 binary tail checksum mismatch at " . ($pos + 2) . "\n"
+            unless $bytes[$pos+2] == $expect_tail;
 
         my @body = map { PCWAV::Common::nibswap($_) } @body_raw;
 
@@ -57,7 +59,7 @@ sub find_and_extract {
             length      => $len,
             name        => $name_text,
             body_bytes  => \@body,
-            footer_ok   => $footer_ok,
+            footer_ok   => 1,
         };
     }
 

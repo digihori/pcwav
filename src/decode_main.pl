@@ -31,7 +31,7 @@ sub usage {
     die <<"MSG";
 usage:
   perl $prog raw      input.wav output.bin
-  perl $prog s1bin    input.wav output.bin
+  perl $prog s1bin    [--skip-ms N] [--skip-samples N] input.wav output.bin
   perl $prog s1basic  input.wav output.bas
   perl $prog s2basic  input.wav output.bas
   perl $prog oldbin   input.wav output.bin
@@ -70,8 +70,9 @@ sub _parse_decode_options_and_decode_raw {
         skip_samples => 0,
     );
 
-    while (@args > 2) {
+    while (@args && $args[0] =~ /^--/) {
         my $k = shift @args;
+        die "missing value for $k\n" if ($k eq '--skip-ms' || $k eq '--skip-samples') && @args < 3;
         if ($k eq '--skip-ms') {
             $opt{skip_ms} = PCWAV::Common::parse_num(shift @args);
         }

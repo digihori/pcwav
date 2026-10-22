@@ -57,6 +57,32 @@ sub checksum_s1_logical {
     return $sum & 0xFF;
 }
 
+# CLI integers: decimal or explicitly prefixed hexadecimal, never signed.
+sub parse_num {
+    my ($s) = @_;
+    die "number is required\n" unless defined $s && length $s;
+    die "invalid non-negative integer: $s\n"
+        unless $s =~ /\A(?:[0-9]+|0[xX][0-9A-Fa-f]+)\z/;
+    # Accumulate with an exact-integer bound, avoiding overflow/rounding.
+    my $base = $s =~ s/\A0[xX]// ? 16 : 10;
+    my $n = 0;
+    for my $digit (split //, $s) {
+        my $v = $digit =~ /[0-9]/ ? ord($digit) - 48 : ord(lc $digit) - 87;
+        die "integer is too large\n" if $n > int((9007199254740991 - $v) / $base);
+        $n = $n * $base + $v;
+    }
+    return $n;
+}
+
+sub validate_binary_range {
+    my ($addr, $len) = @_;
+    die "address must be in 0x0000..0xFFFF\n"
+        unless defined $addr && $addr =~ /\A[0-9]+\z/ && $addr <= 0xFFFF;
+    die "binary length must be in 1..65536 bytes\n"
+        unless defined $len && $len =~ /\A[0-9]+\z/ && $len >= 1 && $len <= 65536;
+    die "binary range exceeds 0xFFFF\n" if $addr + $len > 65536;
+}
+
 sub parse_hex_addr {
     my ($s) = @_;
     die "address is required\n" unless defined $s && length $s;

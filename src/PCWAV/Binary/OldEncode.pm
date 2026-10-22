@@ -1,6 +1,7 @@
 package PCWAV::Binary::OldEncode;
 use strict;
 use warnings;
+use PCWAV::Common;
 use PCWAV::Format::Old ();
 use PCWAV::WavWriter ();
 
@@ -43,6 +44,8 @@ sub encode_payload {
     my $start_addr = $opt{start_addr};
     die "encode_payload: start_addr is required\n"
         unless defined $start_addr;
+
+    PCWAV::Common::validate_binary_range($start_addr, scalar @body);
 
     my $end_offset;
     if (defined $opt{end_offset}) {

@@ -32,9 +32,11 @@ sub usage {
 usage:
   perl $prog s1bin    input.bin output.wav [filename] [addr]
   perl $prog s1basic  input.bas output.wav [filename]
-  perl $prog s2basic  input.bas output.wav [filename]
+  perl $prog s2basic  input.bas output.wav [filename] [type]
   perl $prog oldbin   input.bin output.wav [filename] [addr]
   perl $prog oldbasic input.bas output.wav [filename]
+Addresses: decimal or 0x-prefixed hexadecimal (default 0xC000).
+S2 type: 0x27 (default) or 0x37.
 MSG
 }
 
@@ -89,6 +91,8 @@ sub encode_s2basic {
     $filename = defined $filename ? $filename : '';
 
     my $type_num = defined $type ? PCWAV::Common::parse_num($type) : 0x27;
+
+    die "s2 basic type must be 0x27 or 0x37\n" unless $type_num == 0x27 || $type_num == 0x37;
 
     my $text = PCWAV::Common::read_file_bin($input);
     $text = decode('UTF-8', $text);
@@ -152,10 +156,10 @@ sub main {
 
     my $mode = shift @args;
 
-    if    ($mode eq 's1bin')    { usage() unless @args >= 2; encode_s1bin(@args); }
+    if    ($mode eq 's1bin')    { usage() unless @args >= 2 && @args <= 4; encode_s1bin(@args); }
     elsif ($mode eq 's1basic')  { usage() unless @args >= 2; encode_s1basic(@args); }
-    elsif ($mode eq 's2basic')  { usage() unless @args >= 2; encode_s2basic(@args); }
-    elsif ($mode eq 'oldbin')   { usage() unless @args >= 2; encode_oldbin(@args); }
+    elsif ($mode eq 's2basic')  { usage() unless @args >= 2 && @args <= 4; encode_s2basic(@args); }
+    elsif ($mode eq 'oldbin')   { usage() unless @args >= 2 && @args <= 4; encode_oldbin(@args); }
     elsif ($mode eq 'oldbasic') { usage() unless @args >= 2; encode_oldbasic(@args); }
     else {
         die "unknown mode: $mode\n";
