@@ -25,7 +25,8 @@ sub find_and_extract {
         my $pos = $i + 19;
         my @body_raw;
         my $remaining = $len;
-        while ($remaining >= 120) {
+        # The final full chunk belongs to the tail, just like a partial chunk.
+        while ($remaining > 120) {
             die "s1 binary truncated chunk at $pos\n" if $pos + 121 > @bytes;
             my @chunk = @bytes[$pos .. $pos + 119];
             $pos += 120;

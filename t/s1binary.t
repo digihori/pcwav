@@ -24,7 +24,7 @@ sub fixture {
     my @meta = (0,0,0,0,int($addr/256),$addr%256,int($m/256),$m%256);
     my @p = (103,@name,sumwire(@name),@meta,sumwire(@meta));
     my @raw = map { swap($_) } @$data;
-    while (@raw >= 120) { my @c = splice @raw,0,120; push @p,@c,sumwire(@c); }
+    while (@raw > 120) { my @c = splice @raw,0,120; push @p,@c,sumwire(@c); }
     push @p,@raw,255,255,sumwire(@raw,255);
     return @p;
 }
@@ -46,7 +46,7 @@ for my $len (1,119,120,121,240,4112,65536) {
         my @bad = @expected; $bad[$idx] ^= 1;
         rejected(\@bad,"corrupt position $idx length $len");
     }
-    if ($len >= 120) {
+    if ($len > 120) {
         my @bad = @expected; $bad[139] ^= 1;
         rejected(\@bad,"corrupt full chunk length $len");
     }
@@ -59,6 +59,23 @@ for my $len (1,119,120,121,240,4112,65536) {
     if ($len % 120) {
         @bad=@expected; $bad[-1]=sumwire(255);
         rejected(\@bad,"legacy tail rejected length $len") if $bad[-1] != $expected[-1];
+    }
+}
+# Fixed wire-tail observations from the user-provided synthetic CSAVE captures.
+# No recording or recording-derived payload is embedded here.
+for my $case ([1,0x22],[119,0x3E],[120,0x5E],[121,0xD2],[240,0x66],[4112,0xDF]) {
+    my ($len,$tail) = @$case;
+    my @data = map { ($_ * 73 + 19) % 256 } 0..$len-1;
+    my @p = PCWAV::Binary::S1Encode::build_payload(addr=>0x9000,bytes=>\@data);
+    is($p[-1],$tail,"hardware-observed tail $len");
+    is(scalar(@p),19+$len+int(($len-1)/120)+3,"wire size $len");
+    if ($len % 120 == 0) {
+        # Reject the 0.5.1 layout: a separate final chunk SUM followed by FF-only tail.
+        my @bad = @p;
+        my $last_start = 19 + (int($len/120)-1)*121;
+        my $extra = sumwire(@p[$last_start .. $last_start+119]);
+        splice @bad,-3,3,$extra,255,255,sumwire(255);
+        rejected(\@bad,"reject obsolete full-chunk layout $len");
     }
 }
 for my $case ([65535,1,1],[65535,2,0],[0,65536,1],[1,65536,0],[-1,1,0],[65536,1,0],[0,65537,0]) {

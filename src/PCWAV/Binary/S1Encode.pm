@@ -30,17 +30,16 @@ sub build_payload {
     my $meta_sum = PCWAV::Common::checksum_s1_logical(@meta);
     push @payload, PCWAV::Common::nibswap($meta_sum);
 
-    my @chunk;
-    for my $b (@bin) {
-        push @chunk, PCWAV::Common::nibswap($b);
-        if (@chunk == 120) {
-            push @payload, @chunk;
-            my $sum = PCWAV::Common::checksum_s1_logical(@chunk);
-            push @payload, PCWAV::Common::nibswap($sum);
-            @chunk = ();
-        }
+    # Keep the final 1..120 bytes for the tail, including exact multiples.
+    # PC-1360K CSAVE M: only non-final chunks have a separate checksum.
+    my @chunk = map { PCWAV::Common::nibswap($_) } @bin;
+    while (@chunk > 120) {
+        my @full = splice @chunk, 0, 120;
+        push @payload, @full;
+        my $sum = PCWAV::Common::checksum_s1_logical(@full);
+        push @payload, PCWAV::Common::nibswap($sum);
     }
-    push @payload, @chunk if @chunk;
+    push @payload, @chunk;
 
     push @payload, 0xFF;
     my $tail_sum = PCWAV::Common::checksum_s1_logical(@chunk, 0xFF);
